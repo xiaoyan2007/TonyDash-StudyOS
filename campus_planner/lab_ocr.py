@@ -50,8 +50,22 @@ _STATUS: tuple[bool, str] | None = None
 
 
 def venv_python() -> Path:
-    """``lab/.venv`` 的解释器（onnxruntime 只在这里面）。"""
-    return paths.WORKSPACE_ROOT / "lab" / ".venv" / "Scripts" / "python.exe"
+    """``lab/.venv`` 的解释器（onnxruntime 只在这里面）。
+
+    打包版里 ``WORKSPACE_ROOT`` 指向 ``_internal``，找不到 venv 时再向上找
+    几级目录（开发机上 release/X/_internal → release → 工作区根就能命中
+    ``lab/.venv``）；用户机器上都没有 → :func:`status` 返回降级提示。
+    """
+    default = paths.WORKSPACE_ROOT / "lab" / ".venv" / "Scripts" / "python.exe"
+    if default.is_file():
+        return default
+    base = paths.WORKSPACE_ROOT
+    for _ in range(4):
+        base = base.parent
+        cand = base / "lab" / ".venv" / "Scripts" / "python.exe"
+        if cand.is_file():
+            return cand
+    return default
 
 
 def runner_script() -> Path:

@@ -13,16 +13,26 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 #: `campus_planner/labkit/common/paths.py` -> `campus_planner/`
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
-#: 运行期数据目录（导入历史、缓存、发音、PDF 临时文件），已 gitignore
-DATA_DIR = PACKAGE_ROOT / "_data"
+#: 样例文件随源码 / 随程序分发，只读
+SAMPLE_DIR = PACKAGE_ROOT / "samples"
+
+if getattr(sys, "frozen", False):
+    # 打包运行：数据绝不能放安装目录或临时解包目录（前者卸载会被删、
+    # 后者每次启动都清空），与主程序同源：%APPDATA%\CampusPlanner 下的子目录。
+    _base = os.environ.get("APPDATA") or str(Path.home())
+    DATA_DIR = Path(_base) / "CampusPlanner" / "labkit"
+else:
+    #: 开发期数据目录（导入历史、缓存、发音），已 gitignore
+    DATA_DIR = PACKAGE_ROOT / "_data"
+
 CACHE_DIR = DATA_DIR / "cache"
 AUDIO_DIR = DATA_DIR / "audio"
-SAMPLE_DIR = PACKAGE_ROOT / "samples"
 
 #: 工作区根目录（主程序包与 lab 工具都在这一层）
 WORKSPACE_ROOT = PACKAGE_ROOT.parent
