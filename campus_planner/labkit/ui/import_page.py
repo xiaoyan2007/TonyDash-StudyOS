@@ -18,6 +18,13 @@ from ..common import paths
 from ..ttimport import api
 from .kit import Kit
 
+#: 主题：优先用主程序的（整合后的正常情况）；单独在 lab 里跑时退回 bridge 的兜底主题
+try:
+    from campus_planner import theme as theme  # noqa: F401
+except Exception:  # noqa: BLE001 - lab 独立运行时的兜底
+    from ..common import bridge
+    theme = bridge.theme()
+
 COLUMNS = ("", "课名", "星期", "节次", "周次", "教师", "地点", "提示")
 EDITABLE = {1: "name", 4: "weeks", 5: "teacher", 6: "location"}
 FILE_FILTER = (
@@ -178,10 +185,7 @@ class ImportPage(QWidget):
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setFixedHeight(8)
         self.progress_bar.setVisible(False)
-        self.progress_bar.setStyleSheet(
-            "QProgressBar{background:rgba(255,255,255,170);border:none;border-radius:4px;}"
-            f"QProgressBar::chunk{{background:{theme.C_BLUE};border-radius:4px;}}"
-        )
+        self._style_progress()
         bar_lay.addWidget(self.progress_bar)
         self.progress_text = self.kit.text("", 11.5, theme.C_SUB)
         self.progress_text.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -208,17 +212,7 @@ class ImportPage(QWidget):
         header.setSectionResizeMode(7, QHeaderView.ResizeMode.Interactive)
         self.table.setColumnWidth(0, 34)
         self.table.setColumnWidth(7, 210)
-        self.table.setStyleSheet(
-            f"QTableWidget{{background:transparent;border:none;}}"
-            f"QTableWidget::item{{padding:5px 6px;border-bottom:1px solid rgba(34,52,86,20);}}"
-            f"QTableWidget::indicator{{width:15px;height:15px;}}"
-            f"QTableWidget::indicator:unchecked{{border:1px solid rgba(34,52,86,90);"
-            f"border-radius:4px;background:rgba(255,255,255,235);}}"
-            f"QTableWidget::indicator:checked{{border:1px solid {theme.C_BLUE};"
-            f"border-radius:4px;background:{theme.C_BLUE};}}"
-            f"QHeaderView::section{{background:transparent;border:none;"
-            f"border-bottom:1px solid rgba(34,52,86,36);color:{theme.C_SUB};padding:6px 6px;}}"
-        )
+        self._style_table()
         self.table.itemChanged.connect(self._on_item_changed)
         table_lay.addWidget(self.table, 1)
 
@@ -258,13 +252,57 @@ class ImportPage(QWidget):
         spin.setFixedHeight(30)
         spin.setFont(self.kit.theme.font(11.5))
         spin.setToolTip("整学期有多少周。它决定「1-16周」是全周还是只上前 16 周。")
-        spin.setStyleSheet(
-            "QSpinBox{background:rgba(255,255,255,220);border:1px solid rgba(34,52,86,40);"
-            "border-radius:8px;padding:0 6px;}"
-        )
-        spin.valueChanged.connect(self._on_total_changed)
         self.total_spin = spin
+        spin.valueChanged.connect(self._on_total_changed)
+        self._style_spin()
         return spin
+
+    # ------------------------------------------------------------------ 主题
+    def _style_spin(self) -> None:
+        """学期周数输入框：按当前主题取色（夜间下不能用写死的浅底）。"""
+        dark = theme.MODE == "dark"
+        bg = "rgba(255,255,255,22)" if dark else "rgba(255,255,255,220)"
+        border = "rgba(255,255,255,54)" if dark else "rgba(34,52,86,40)"
+        self.total_spin.setStyleSheet(
+            f"QSpinBox{{background:{bg};border:1px solid {border};"
+            f"border-radius:8px;padding:0 6px;color:{theme.C_TEXT};}}"
+        )
+
+    def _style_progress(self) -> None:
+        track = "rgba(255,255,255,30)" if theme.MODE == "dark" else "rgba(255,255,255,170)"
+        self.progress_bar.setStyleSheet(
+            f"QProgressBar{{background:{track};border:none;border-radius:4px;}}"
+            f"QProgressBar::chunk{{background:{theme.C_BLUE};border-radius:4px;}}"
+        )
+
+    def _style_table(self) -> None:
+        dark = theme.MODE == "dark"
+        line = "rgba(255,255,255,26)" if dark else "rgba(34,52,86,20)"
+        header_line = "rgba(255,255,255,40)" if dark else "rgba(34,52,86,36)"
+        ind_border = "rgba(255,255,255,110)" if dark else "rgba(34,52,86,90)"
+        ind_bg = "rgba(255,255,255,28)" if dark else "rgba(255,255,255,235)"
+        self.table.setStyleSheet(
+            f"QTableWidget{{background:transparent;border:none;}}"
+            f"QTableWidget::item{{padding:5px 6px;border-bottom:1px solid {line};"
+            f"color:{theme.C_TEXT};}}"
+            f"QTableWidget::indicator{{width:15px;height:15px;}}"
+            f"QTableWidget::indicator:unchecked{{border:1px solid {ind_border};"
+            f"border-radius:4px;background:{ind_bg};}}"
+            f"QTableWidget::indicator:checked{{border:1px solid {theme.C_BLUE};"
+            f"border-radius:4px;background:{theme.C_BLUE};}}"
+            f"QHeaderView::section{{background:transparent;border:none;"
+            f"border-bottom:1px solid {header_line};color:{theme.C_SUB};padding:6px 6px;}}"
+        )
+
+    def sync_theme(self) -> None:
+        """切主题后重刷写死过颜色的控件（输入框、进度条、表格）。"""
+        if hasattr(self, "total_spin"):
+            self._style_spin()
+        if hasattr(self, "progress_bar"):
+            self._style_progress()
+        if hasattr(self, "table"):
+            self._style_table()
+            self.refresh()
 
     # ------------------------------------------------------------------ 导入
     def pick_files(self) -> None:

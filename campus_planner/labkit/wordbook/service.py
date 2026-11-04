@@ -77,6 +77,7 @@ class WordService:
 
     # ------------------------------------------------------------------ 查询
     def lookup(self, query: str, *, use_cache: bool = True, want_voice: bool = False,
+               lang: str = "en",
                on_progress: Callable[[int, str], None] | None = None) -> LookupResult:
         started = time.perf_counter()
 
@@ -97,10 +98,12 @@ class WordService:
                 error="请输入要查询的单词或短语",
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
             )
+        le = str(lang or "en").strip().lower() or "en"
 
-        # 1) 缓存
+        # 1) 缓存（键带语言：法汉词典命中不能拿去回答英汉查询）
+        ck = norm if le == "en" else f"{norm}::{le}"
         if use_cache:
-            hit = self.cache.get(norm)
+            hit = self.cache.get(ck)
             if hit is not None:
                 emit(100, "缓存命中")
                 return LookupResult(
@@ -114,11 +117,11 @@ class WordService:
         if self.client is not None:
             emit(20, "连接有道词典…")
             try:
-                entry = self.client.query(norm, on_progress=on_progress)
+                entry = self.client.query(norm, lang=le, on_progress=on_progress)
                 if entry.found:
                     emit(80, "整理释义…")
-                    self.cache.put(entry)
-                    self._recent[norm] = entry
+                    self.cache.put(entry, key=ck)
+                    self._recent[ck] = entry
                     emit(100, "查询完成")
                     return LookupResult(
                         entry=entry,

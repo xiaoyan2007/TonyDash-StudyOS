@@ -271,8 +271,10 @@ class QueryCache:
         item["seen"] = int(item.get("seen", 0) or 0) + 1
         return WordEntry.from_dict(item)
 
-    def put(self, entry: WordEntry) -> None:
-        key = (entry.norm or entry.word or "").strip().lower()
+    def put(self, entry: WordEntry, *, key: str | None = None) -> None:
+        """写入缓存。``key`` 可显式指定（多语种查询要带语言后缀，
+        否则「bonjour 的法汉结果」会被「bonjour 的英汉查询」命中）。"""
+        key = ((key if key is not None else (entry.norm or entry.word)) or "").strip().lower()
         if not key:
             return
         if not entry.fetched_at:

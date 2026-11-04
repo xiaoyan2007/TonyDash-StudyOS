@@ -583,6 +583,22 @@ class MainWindow(QWidget):
                 frame.setStyleSheet(theme.divider_style(14))
             elif frame.objectName() == "divider":
                 frame.setStyleSheet(theme.divider_style(16))
+        # 已打开的对话框是独立顶层窗口，不在 stack 的页面树里，
+        # 页面重建管不到它们，必须单独重刷（否则夜间下白底白字）。
+        self._sync_open_dialogs()
+
+    def _sync_open_dialogs(self) -> None:
+        for top in QApplication.topLevelWidgets():
+            if not isinstance(top, widgets.GlassDialog):
+                continue
+            try:
+                top.sync_theme()
+            except Exception:  # noqa: BLE001 - 单个弹窗刷新失败不该中断切主题
+                pass
+
+    def _sync_dialog_theme(self) -> None:
+        """兼容旧调用名。"""
+        self._sync_open_dialogs()
 
     def _rebuild_theme_pages(self):
         """页面构造时把主题色写进了各自的样式表，切主题只能重建。

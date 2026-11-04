@@ -130,6 +130,70 @@ class _SearchBoxWidget(QLineEdit):
         )
 
 
+class _Segmented(QWidget):
+    """兜底分段控件（选项卡）：两段以上按钮，选中项高亮。"""
+
+    from PySide6.QtCore import Signal as _Signal
+
+    changed = _Signal(str)
+
+    def __init__(self, items, current=None, parent=None):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QPushButton
+
+        self.items = list(items)
+        self.setFixedHeight(34)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        self.group = QButtonGroup(self)
+        self.group.setExclusive(True)
+        self._buttons = {}
+        for key, label in self.items:
+            btn = QPushButton(label, self)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(30)
+            btn.clicked.connect(lambda _checked=False, k=key: self._pick(k))
+            lay.addWidget(btn, 1)
+            self.group.addButton(btn)
+            self._buttons[key] = btn
+        self._retint()
+        self.set_current(current or self.items[0][0], emit=False)
+
+    def _retint(self):
+        theme = bridge.theme()
+        dark = theme.MODE == "dark"
+        base = "rgba(255,255,255,22)" if dark else "rgba(28,28,30,18)"
+        on = "rgba(10,132,255,44)"
+        for btn in self._buttons.values():
+            btn.setStyleSheet(
+                f"QPushButton{{color:{theme.C_SUB};background:{base};border:none;"
+                f"border-radius:9px;font-size:11px;}}"
+                f"QPushButton:checked{{color:{theme.C_BLUE};background:{on};font-weight:600;}}"
+            )
+
+    def _pick(self, key):
+        self.changed.emit(key)
+
+    def current(self):
+        for key, btn in self._buttons.items():
+            if btn.isChecked():
+                return key
+        return self.items[0][0]
+
+    def set_current(self, key, emit=False):
+        btn = self._buttons.get(key)
+        if not btn:
+            return
+        btn.setChecked(True)
+        if emit:
+            self.changed.emit(key)
+
+    def sync_theme(self):
+        self._retint()
+
+
 class _NavButton(QPushButton):
     """兜底导航项：图标用图标字体渲染成 QIcon，文字用正文字体。"""
 
@@ -257,6 +321,12 @@ class Kit:
         from PySide6.QtWidgets import QComboBox
 
         return QComboBox(parent)
+
+    def segmented(self, items, current: str | None = None, parent=None):
+        """分段控件（选项卡）。主程序在旁边就用它的 Segmented，视觉一致。"""
+        if self.has_main_widgets:
+            return self.widgets.Segmented(items, current, parent)
+        return _Segmented(items, current, parent)
 
     def empty_state(self, icon: str, title: str, desc: str, parent=None) -> QWidget:
         if self.has_main_widgets:

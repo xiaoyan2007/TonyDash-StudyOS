@@ -11,7 +11,10 @@
 from .entry_view import EntryView, glyph_button, glyph_label
 from .import_page import ImportPage
 from .kit import Kit
-from .media import AudioPlayback, AudioPlayer, AudioFetchWorker, LookupWorker, SaveWorker, media_available
+from .media import (
+    AudioPlayback, AudioPlayer, AudioFetchWorker, LookupWorker, SaveWorker,
+    TranslateWorker, media_available,
+)
 from .word_page import WordPage
 from .wordbook_page import WordbookPage
 
@@ -28,5 +31,6 @@ __all__ = [
     "AudioFetchWorker",
     "LookupWorker",
     "SaveWorker",
+    "TranslateWorker",
     "media_available",
 ]

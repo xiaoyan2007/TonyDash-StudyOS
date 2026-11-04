@@ -139,15 +139,22 @@ class YoudaoClient:
         raise last if last is not None else YoudaoError(f"{what} 失败")
 
     # ------------------------------------------------------------------ 查询
-    def query_json(self, word: str, *, on_progress: Callable[[int, str], None] | None = None) -> dict:
+    def query_json(self, word: str, *, lang: str = "en",
+                   on_progress: Callable[[int, str], None] | None = None) -> dict:
         """取原始 JSON（``jsonapi``）。
 
         **空查询在本地就拒绝**：有道对空串会返回单词 ``null`` 的完整词条。
+        ``lang`` 是词典方向（``jsonapi`` 的 ``le`` 参数）：``en`` 英汉、
+        ``fr`` 法汉、``ja`` 日汉…；``auto`` 时交给服务端判断。
         """
         norm = P.normalize(word)
         if not norm:
             raise YoudaoError("查询内容为空")
+        le = str(lang or "en").strip().lower()
         url = P.JSONAPI_URL.format(query=urllib.parse.quote(norm))
+        # en 是接口默认方向；auto 交给服务端判断，不传 le（传了反而拿不到词条）
+        if le and le not in ("en", "auto"):
+            url += f"&le={urllib.parse.quote(le)}"
         body = self._request(url, accept="application/json", what="查询",
                              on_progress=on_progress)
         try:
@@ -158,10 +165,10 @@ class YoudaoClient:
             raise YoudaoError("返回内容格式异常")
         return raw
 
-    def query(self, word: str, *, limit_sents: int = 12,
+    def query(self, word: str, *, limit_sents: int = 12, lang: str = "en",
               on_progress: Callable[[int, str], None] | None = None) -> WordEntry:
-        """查询并解析成 :class:`WordEntry`。"""
-        raw = self.query_json(word, on_progress=on_progress)
+        """查询并解析成 :class:`WordEntry`（``lang`` 见 :meth:`query_json`）。"""
+        raw = self.query_json(word, lang=lang, on_progress=on_progress)
         entry = P.parse_entry(raw, query=word, limit_sents=limit_sents)
         entry.raw_size = len(json.dumps(raw, ensure_ascii=False))
         return entry

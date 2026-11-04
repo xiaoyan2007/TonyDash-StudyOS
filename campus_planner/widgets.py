@@ -820,6 +820,49 @@ class _WrapLabel(QLabel):
         self._sync_min_height()
 
 
+class ThemedLabel(QLabel):
+    """按**主题令牌名**取色的标签，切主题后自动重刷。
+
+    Qt 的 styleSheet 是「设置即固化」的：把 ``theme.C_TEXT`` 烘进去，切到夜间
+    还是那串旧颜色，于是出现「夜间白底黑字 / 深底深字」。这里只记令牌名
+    （``"C_TEXT"`` / ``"C_SUB"`` / ``"C_BLUE"``…），每次重绘前从 ``theme`` 现取，
+    再配合 :func:`refresh_themed` 让整棵树在切主题时一起更新。
+    """
+
+    def __init__(self, text: str = "", token: str = "C_TEXT", size: float = 12,
+                 weight=None, parent=None, wrap: bool = False):
+        super().__init__(text, parent)
+        self._token = token
+        self._weight = weight
+        self.setFont(theme.font(size, weight) if weight else theme.font(size))
+        self.setWordWrap(wrap)
+        self.setStyleSheet("background: transparent;")
+        if wrap:
+            self.setSizePolicy(QSizePolicy.Policy.Preferred,
+                               QSizePolicy.Policy.Minimum)
+        self.refresh_theme()
+
+    def set_token(self, token: str):
+        self._token = token
+        self.refresh_theme()
+
+    def refresh_theme(self):
+        color = getattr(theme, self._token, theme.C_TEXT)
+        self.setStyleSheet(f"color: {color}; background: transparent;")
+
+
+def refresh_themed(root: QWidget) -> int:
+    """遍历 ``root`` 子树，让所有 :class:`ThemedLabel` 按新主题重刷一次。"""
+    count = 0
+    for w in root.findChildren(ThemedLabel):
+        try:
+            w.refresh_theme()
+            count += 1
+        except Exception:  # noqa: BLE001 - 单个标签失败不该中断整树刷新
+            pass
+    return count
+
+
 class EmptyState(QWidget):
     def __init__(self, icon: str, title: str, desc: str, action: QWidget | None = None,
                  parent=None):
@@ -1147,6 +1190,28 @@ class GlassDialog(QDialog):
 
         self.setFixedWidth(width + 56)
         self.setSizeGripEnabled(False)
+        # 卡片底色是构造时按主题写死的；切主题后必须重新写一遍，
+        # 否则夜间模式下会出现「白底白字」——各对话框在自己的 _build 末尾
+        # 调 sync_theme() 刷新（子类若再改卡片样式，也需要重刷）。
+        self._dialog_radius = 20
+
+    def _card_style(self) -> str:
+        _dark = theme.MODE == "dark"
+        _bg = "rgba(32, 37, 52, 246)" if _dark else "rgba(255, 255, 255, 243)"
+        _bd = "rgba(255, 255, 255, 58)" if _dark else "rgba(255, 255, 255, 248)"
+        return (f"#dialogCard {{ background: {_bg};"
+                f" border: 1px solid {_bd}; border-radius: {self._dialog_radius}px; }}")
+
+    def sync_theme(self) -> None:
+        """按当前主题重刷卡片底色与标题/副标题颜色（对话框不随主窗口重建）。"""
+        self.card.setStyleSheet(self._card_style())
+        self.title_label.setStyleSheet("background: transparent;")
+        self.subtitle_label.setStyleSheet(
+            f"color: {theme.C_SUB}; background: transparent;")
+        # 正文里可能还有写死了颜色的控件，统一交给子类的 refresh_theme 钩子
+        hook = getattr(self, "refresh_theme", None)
+        if callable(hook):
+            hook()
 
     def add_footer(self, widget: QWidget, stretch_before: bool = True):
         if stretch_before:

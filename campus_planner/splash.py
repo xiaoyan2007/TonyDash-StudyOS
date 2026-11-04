@@ -120,13 +120,25 @@ class SplashScreen(QWidget):
         self._draw_grid(p, w, h, t)
         self._draw_orbs(p, w, h, t)
         self._draw_particles(p, w, h, t)
-        self._draw_tag_pills(p, w, h, t)
 
         alpha = 1.0 - _smoothstep(t, max(0.0, total - 0.5), total)
         if alpha <= 0.001:
             p.end()
             return
+
+        # 整屏「从屏幕里浮出来」：内容层从小到大 + 从后方推近，
+        # 前 1.1 秒完成，之后保持稳定。用缩放 + 轻微下沉的组合，
+        # 视觉上像贴在屏幕后方、被光推出来。
+        emerge = _smoothstep(t, 0.0, 1.1)
+        scale = 0.72 + 0.28 * _ease_out(emerge)
+        rise = (1.0 - _ease_out(emerge)) * 46.0
+
+        p.save()
         p.setOpacity(alpha)
+        # 以中心为缩放原点
+        p.translate(w / 2.0, h / 2.0)
+        p.scale(scale, scale)
+        p.translate(-w / 2.0, -h / 2.0 + rise)
 
         cx = w / 2.0
         # 各要素按固定纵坐标分层，LOGO / 软件名 / 开发者信息互不重叠
@@ -142,6 +154,7 @@ class SplashScreen(QWidget):
         self._draw_version_row(p, cx, ly_version, ly_dev, t, w)
         self._draw_quote(p, cx, ly_quote, t, w)
         self._draw_progress(p, w, h, t)
+        p.restore()
         p.end()
 
     def _draw_grid(self, p, w, h, t):
@@ -195,35 +208,12 @@ class SplashScreen(QWidget):
         p.restore()
 
     def _draw_tag_pills(self, p, w, h, t):
-        """几枚向上飘动的学习标签，作为激励学习的元素。"""
-        p.save()
-        for i, tag in enumerate(self._tags):
-            base = 0.42 + i * 0.13
-            ph = (t - base) % 1.6
-            if ph < 0 or ph > 1.6:
-                ph = (t + i * 0.31) % 1.6
-            y = h * 0.92 - ph * h * 0.62
-            if y < -30:
-                continue
-            x = w * (0.18 + i * 0.16) + math.sin(t * 0.9 + i) * 8
-            alpha = _smoothstep(ph, 0.0, 0.18) * (1.0 - _smoothstep(ph, 1.25, 1.6)) * 0.55
-            if alpha <= 0.02:
-                continue
-            p.setOpacity(alpha)
-            path = QPainterPath()
-            tw = 62
-            path.addRoundedRect(QRectF(x - tw / 2.0, y - 12, tw, 24), 12, 12)
-            p.setBrush(QColor(90, 130, 255, int(150 * alpha / 0.55)))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawPath(path)
-            p.setOpacity(1.0)
-            f = QFont(theme.FONT_FAMILY)
-            f.setPixelSize(11)
-            p.setFont(f)
-            p.setPen(QColor(210, 230, 255, int(220 * alpha / 0.55)))
-            p.drawText(QRectF(x - tw / 2.0, y - 12, tw, 24),
-                       Qt.AlignmentFlag.AlignCenter, tag)
-        p.restore()
+        """旧的「向上飘动的学习标签方块」——已停用，保留空实现便于回滚。
+
+        用户明确要求去掉上下飞的方块；现在的入场动画改由 paintEvent 里的
+        整体「从屏幕中浮现」（缩放 + 上浮）承担。
+        """
+        return
 
     def _draw_logo(self, p, cx, cy, t):
         """画 LOGO：严格居中于圆心，方块内接在圆环内。"""

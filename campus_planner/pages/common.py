@@ -17,16 +17,14 @@ class PageHeader(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(3)
-        self.eyebrow = QLabel(eyebrow.capitalize() if eyebrow.isascii() else eyebrow, self)
-        self.eyebrow.setFont(theme.font(11, theme.QFont.Weight.DemiBold))
-        self.eyebrow.setStyleSheet(f"color: {theme.C_BLUE}; background: transparent;")
+        self.eyebrow = widgets.ThemedLabel(
+            eyebrow.capitalize() if eyebrow.isascii() else eyebrow,
+            "C_BLUE", 11, theme.QFont.Weight.DemiBold, self)
         lay.addWidget(self.eyebrow)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
-        self.title = QLabel(title, self)
-        self.title.setFont(theme.font(26, theme.QFont.Weight.Bold))
-        self.title.setStyleSheet(f"color: {theme.C_TEXT}; background: transparent;")
+        self.title = widgets.ThemedLabel(title, "C_TEXT", 26, theme.QFont.Weight.Bold, self)
         row.addWidget(self.title)
         row.addStretch(1)
         self.actions = QHBoxLayout()
@@ -34,10 +32,7 @@ class PageHeader(QWidget):
         self.actions.setSpacing(8)
         row.addLayout(self.actions)
         lay.addLayout(row)
-        self.subtitle = QLabel(subtitle, self)
-        self.subtitle.setFont(theme.font(12))
-        self.subtitle.setStyleSheet(f"color: {theme.C_SUB}; background: transparent;")
-        self.subtitle.setWordWrap(True)
+        self.subtitle = widgets.ThemedLabel(subtitle, "C_SUB", 12, parent=self, wrap=True)
         lay.addWidget(self.subtitle)
 
         # 固定的“这一页怎么用”，不会被动态副标题覆盖
@@ -47,16 +42,17 @@ class PageHeader(QWidget):
         hl.setContentsMargins(0, 2, 0, 0)
         hl.setSpacing(6)
         hl.addWidget(widgets.IconLabel("info", 12, theme.C_BLUE))
-        self.hint = QLabel(hint, self.hint_row)
-        self.hint.setFont(theme.font(11))
-        self.hint.setStyleSheet(f"color: {theme.C_BLUE}; background: transparent;")
-        self.hint.setWordWrap(True)
+        self.hint = widgets.ThemedLabel(hint, "C_BLUE", 11, parent=self.hint_row, wrap=True)
         hl.addWidget(self.hint, 1)
         lay.addWidget(self.hint_row)
         self.hint_row.setVisible(bool(hint))
 
     def add_action(self, widget: QWidget):
         self.actions.addWidget(widget)
+
+    def sync_theme(self) -> None:
+        """切主题时重刷页头里按主题取色的文字。"""
+        widgets.refresh_themed(self)
 
     def set_eyebrow(self, text: str):
         self.eyebrow.setText(text)

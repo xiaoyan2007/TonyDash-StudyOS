@@ -174,7 +174,15 @@ class ScheduleImportPage(QWidget):
                 pass
 
     def sync_theme(self) -> None:
-        """ImportPage 把主题色写死在构造期，切主题只能重建。"""
+        """切主题：优先让 ImportPage 就地重刷，避免重建丢掉已识别的结果。"""
+        fn = getattr(self._page, "sync_theme", None)
+        if callable(fn):
+            try:
+                fn()
+                return
+            except Exception:  # noqa: BLE001 - 就地刷新失败再退回重建
+                pass
+        # 兜底：ImportPage 没有 sync_theme 时整页重建
         self.stop()
         old = self._page
         self._page = ImportPage(self._kit, toast=None)

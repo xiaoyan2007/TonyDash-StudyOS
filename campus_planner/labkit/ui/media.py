@@ -94,11 +94,13 @@ class LookupWorker(QThread):
     done = Signal(object)
     progress = Signal(int, str)
 
-    def __init__(self, service, query: str, *, use_cache: bool = True, parent=None):
+    def __init__(self, service, query: str, *, use_cache: bool = True,
+                 lang: str = "en", parent=None):
         super().__init__(parent)
         self.service = service
         self.query = query
         self.use_cache = use_cache
+        self.lang = lang
 
     def run(self) -> None:  # noqa: D102 - QThread 入口
         from ..wordbook.service import LookupResult
@@ -108,9 +110,39 @@ class LookupWorker(QThread):
 
         try:
             result = self.service.lookup(self.query, use_cache=self.use_cache,
-                                         on_progress=report)
+                                         lang=self.lang, on_progress=report)
         except Exception as exc:  # noqa: BLE001 - 兜底：绝不让线程异常冒到 Qt 层
             result = LookupResult(error=f"查询出错：{type(exc).__name__}: {exc}")
+        self.done.emit(result)
+
+
+class TranslateWorker(QThread):
+    """后台翻译：``done`` 带一个 ``dict``（见 ``wordbook.translate.translate``）。"""
+
+    done = Signal(object)
+    progress = Signal(int, str)
+
+    def __init__(self, client, text: str, *, source: str = "auto",
+                 target: str = "zh", parent=None):
+        super().__init__(parent)
+        self.client = client
+        self.text = text
+        self.source = source
+        self.target = target
+
+    def run(self) -> None:  # noqa: D102 - QThread 入口
+        from ..wordbook import translate as T
+
+        def report(pct, msg):
+            self.progress.emit(int(pct), str(msg))
+
+        try:
+            result = T.translate(self.client, self.text, source=self.source,
+                                 target=self.target, on_progress=report)
+        except Exception as exc:  # noqa: BLE001 - 兜底：绝不让线程异常冒到 Qt 层
+            result = {"ok": False, "text": self.text, "result": "",
+                      "source": self.source, "target": self.target,
+                      "error": f"翻译出错：{type(exc).__name__}: {exc}"}
         self.done.emit(result)
 
 
@@ -242,5 +274,6 @@ __all__ = [
     "AudioPlayer",
     "LookupWorker",
     "SaveWorker",
+    "TranslateWorker",
     "media_available",
 ]

@@ -163,6 +163,16 @@ class CourseDialog(widgets.GlassDialog):
         self.add_footer(cancel)
         self.add_footer(save)
         self._refresh()
+        self.sync_theme()
+
+    # -- 主题
+    def refresh_theme(self) -> None:
+        """切主题后重刷写进样式表的颜色（提示、预览富文本）。"""
+        self.hint.setStyleSheet("background: transparent;")
+        self.preview.setStyleSheet("background: transparent;")
+        self.warn.setStyleSheet(f"color: {theme.C_AMBER}; background: transparent;")
+        # 预览是富文本，颜色在 _refresh 里按主题拼装，重跑一次即可
+        self._refresh()
 
     # -- 交互
     def _fill_end(self, selected: int):
@@ -182,8 +192,13 @@ class CourseDialog(widgets.GlassDialog):
         self._refresh()
 
     def _on_mode_changed(self, key: str):
-        self.weeks_box.setVisible(key == "custom")
-        self.weeks_edit.setFocus()
+        custom = key == "custom"
+        self.weeks_box.setVisible(custom)
+        # 输入框本身也要跟着显隐：只显示外层容器时，里面的 QLineEdit
+        # 仍然是 hidden，用户看到的只有一个空白区域，根本没法输入。
+        self.weeks_edit.setVisible(custom)
+        if custom:
+            self.weeks_edit.setFocus()
         self._refresh()
         self.adjustSize()
 
@@ -437,6 +452,13 @@ class ExamDialog(widgets.GlassDialog):
         save.clicked.connect(self._save)
         self.add_footer(cancel)
         self.add_footer(save)
+        self._refresh()
+        self.sync_theme()
+
+    def refresh_theme(self) -> None:
+        """切主题后重刷写进样式表的颜色。"""
+        self.preview.setStyleSheet("background: transparent;")
+        self.warn.setStyleSheet(f"color: {theme.C_AMBER}; background: transparent;")
         self._refresh()
 
     def _add_custom(self, label: str, value: str):

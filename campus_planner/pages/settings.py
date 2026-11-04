@@ -307,6 +307,10 @@ class SettingsPage(QWidget):
         self.theme_seg.blockSignals(False)
         for picker in self.findChildren(widgets.TimePicker):
             picker.apply_theme()
+        # 设置页是「不重建、只 sync_theme」的页面，写死过颜色的标签要在这里重刷
+        widgets.refresh_themed(self)
+        if hasattr(self, "header"):
+            self.header.sync_theme()
 
     def _on_theme(self, mode: str):
         if not self.data:
