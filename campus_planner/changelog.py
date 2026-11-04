@@ -1,0 +1,326 @@
+"""版本更新日志：应用内展示与逐版本 txt 导出共用一份数据。"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from . import core, theme
+
+
+@dataclass
+class Release:
+    version: str
+    date: str
+    headline: str
+    slogan: str
+    sections: list[tuple[str, list[str]]] = field(default_factory=list)
+    app_name: str = ""
+
+
+RELEASES: list[Release] = [
+    Release(
+        version="Beta 1.4",
+        date="2026-11-04",
+        headline="启动动画 · 鸣谢名单 · 作息改版",
+        slogan="一块玻璃，从点亮的第一秒开始陪你。",
+        sections=[
+            ("新增", [
+                "<b>科技感启动动画</b>：深色渐变背景、流动光团与向上飘的学习标签，软件 LOGO、开发者头像、版本号与激励学习文案依次浮现，底部进度条收束后进入主界面",
+                "<b>鸣谢名单</b>：设置页新增，按学校拼音排序，展示各校参与测试的同学，校徽可自行替换为官方 Logo",
+                "<b>主题切换渐变</b>：日间 / 夜间切换时当前画面整体淡出再淡入，背景与文字一起过渡，不再瞬间跳变",
+                "<b>页面按需加载</b>：启动时只构建主页，其余页面在第一次切到时才创建",
+                "<b>字体与背景缓存</b>：同一字号、图标字体、毛玻璃背景只生成一次，启动更快、切换更顺",
+                "<b>作息时间下拉框</b>：每一节的起止时间改为小时 / 分钟两个下拉框，点击即可直接输入编辑，并屏蔽滚轮误改",
+            ]),
+            ("变更", [
+                "<b>默认作息</b>：改为浙江工商大学作息（第一节 8:05 起共 12 节），「恢复默认」改为「采用浙江工商大学作息」",
+                "<b>右上角主题按钮</b>：改用 Emoji 月亮 / 太阳图标，任何系统上都不会退化成字母",
+                "<b>关于页 GitHub 卡片</b>：点击方式加固，openUrl 失败时自动回退到系统浏览器",
+                "<b>更新日志</b>：关于页新增「查看全部更新日志」入口，独立窗口打开且当前版本在最上方；「最近更新」预览按新增 / 变更 / 修复 / 说明轮转取条目",
+                "<b>默认学期</b>：全新安装的学期名称默认「2026-2027学年第1学期」，开学第一周周一默认 2026 年 9 月 14 日",
+            ]),
+            ("修复", [
+                "全局样式表占位符前缀冲突（$POPUP 抢先命中 $POPUP_BORDER）导致弹层与输入框边框颜色失效",
+                "启动动画读取图标字体缓存时调用了 PySide6 不存在的 QFont.copy()",
+                "窗口反复创建时全局样式表被重复应用，导致界面重建越来越慢",
+                "作息时间下拉框在日间模式下全黑（Win32 原生菜单不遵循应用级样式表）——改为自绘玻璃弹出层",
+                "夜间模式下多处文字颜色未跟随主题导致看不见（Chip 标签、白底按钮、更新日志标签、日历表头与日历 QSS）——全部按主题着色",
+                "右上角主题按钮矢量图标在部分系统退化成字母「i」——改用 Emoji 月亮 / 太阳",
+                "除标题外的小字整体偏小——按美学重新分级放大",
+                "夜间模式下课表课程块、Toast 提示、弹窗卡片与分隔线仍是浅色底，文字看不清——全部改为按主题取色",
+                "「最近更新」等处文字被加上删除线（字体缓存对象被 setStrikeOut 就地改写）——字体缓存改为返回副本",
+                "关于窗口内容被裁切（顶层窗口高度被限制在屏幕 2/3）——改为按内容最小高度撑开",
+                "作息时间数字左侧被裁掉（输入框同时有水平内边距与居中对齐）——内边距归零",
+                "作息时间下拉框过宽、选项靠左、不定位当前值——收窄为定宽并居中高亮当前值",
+                "日期框弹出的日历整块变黑（QCalendarWidget 的内部视图遇到带 alpha 的 rgba 背景会被合成到纯黑上）——日历底色与星期表头改用不透明颜色",
+                "设置页「学期」卡片的说明文字比「外观」低一截（卡片被同行拉高时表头跟着散开）——表头固定高度，多余空间落到卡片底部",
+                "改完「开学第一周周一」后左栏学期进度条不动——改为按新开学日期重新计算当前周次",
+                "旧版备份里写成周次数组（如 <code>[1, 2, 3]</code>）的课程，升级后会被悄悄放大成「每学期每周都上」——改为还原成自定义周次",
+                "旧版备份里周次模式名损坏但周次文本还在的课程，升级后同样丢失自定义周次——按自定义周次还原",
+            ]),
+            ("说明", [
+                "完成使用者角度自查（逐页目检浅色 / 深色截图）并补充自动化测试",
+                "严格审查代码：数据迁移、周次与日期边界、ICS 折行与转义、空数据渲染、主题切换耗时等均已补回归测试",
+                "本版本暂不打包安装包",
+            ]),
+        ],
+    ),
+    Release(
+        version="Beta 1.3",
+        date="2026-11-03",
+        headline="上手引导 · 深色模式 · 作息改版",
+        slogan="不用猜，界面自己会告诉你怎么用；夜里也照样清楚。",
+        sections=[
+            ("新增", [
+                "<b>三步上手引导</b>：首次启动自动高亮「添加第一门课程 → 待办输入框 → 新增考试」，配说明气泡，可上一步/跳过，完成后不再打扰",
+                "<b>上手清单</b>：主页新增三项微任务（建课 / 加待办 / 记考试），做完自动打勾，全部完成或手动关闭后收起",
+                "<b>页面使用提示</b>：课表、待办、考试页头新增常驻蓝色提示行，说明该页关键操作",
+                "<b>重看引导</b>：设置页新增「重新查看上手引导」，随时可以再看一遍",
+                "<b>深色模式</b>：标题栏一键切换，设置页也有浅色 / 深色分段控件，深色下文字、卡片、输入框、滚动条、日历与弹窗全部重绘",
+                "<b>主题令牌化</b>：浅色与深色两套配色、背景渐变、玻璃卡片阴影与高光全部随模式变化，切换后没有残留的浅色观感",
+                "<b>作息时间下拉框</b>：每一节的起止时间改为小时 / 分钟两个下拉框，点击即可直接输入编辑",
+                "<b>滑块缓动</b>：外观毛玻璃强度改为平滑滑块，拖动时数值连续过渡",
+                "<b>时钟秒数</b>：主页大时钟的秒与时分同字号，用冒号连成 HH:MM:SS",
+            ]),
+            ("变更", [
+                "<b>文字放大</b>：标题栏品牌名与副标题、主页各处小字、卡片脚注、周概览日期按美学重新分级",
+                "<b>主行动按钮</b>：主页按数据状态切换为「添加第一门课程」或「打开课程表」",
+                "<b>按钮文案</b>：「去勾待办 / 考试安排」改为「查看今日待办 / 查看考试安排」",
+                "<b>页面副标题</b>：动态状态与操作提示分离，提示不再被数据覆盖",
+                "<b>数据格式</b>：升级到 v3，新增 onboarded / checklist_dismissed / hints_dismissed / theme_mode，旧数据自动补默认值",
+            ]),
+            ("修复", [
+                "与背景同色按钮获得焦点时四个圆角出现蓝色弧线（焦点环画在控件外侧被裁掉）",
+                "主页新增上手清单后，1280×820 下摘要卡与本周概览被挤重叠",
+                "作息时间用滚轮调整容易误改，改为下拉框并屏蔽滚轮",
+                "窗口反复创建时全局样式表被重复应用，导致界面重建越来越慢",
+            ]),
+            ("说明", [
+                "64 项自动测试通过：核心 30 + 待办 / 更新日志 6 + GUI 28",
+            ]),
+        ],
+    ),
+    Release(
+        version="Beta 1.2",
+        date="2026-11-02",
+        headline="细节打磨 · 层级与可读性",
+        slogan="把该看清的看清，把该安静的安静。",
+        sections=[
+            ("新增", [
+                "<b>界面层级</b>：卡片加深边缘、增强投影，让白玻璃从浅蓝背景上真正浮起来",
+                "<b>实心导航</b>：侧栏选中项改为 iOS 蓝实心块，图标与文字反白，位置一眼可见",
+                "<b>空状态引导</b>：课表、待办、考试的空状态统一放大图标与说明，并提供直接新增按钮",
+                "<b>课表工具栏</b>：周切换、搜索与计数收进一块浅玻璃条，不再散落在页面上",
+                "<b>考试空态</b>：空考试时压缩为一条 104 高的提示条，隐藏空倒计时与进度条",
+                "<b>实时毛玻璃</b>：拖动强度滑块时用 16ms 合并重绘，背景模糊连续变化",
+            ]),
+            ("变更", [
+                "<b>文字颜色</b>：全局次级文字统一加深为 #5F5F66，弱化不再等于看不清",
+                "<b>数字排版</b>：统计卡数字、周次、时间轴字号与字重重新分级",
+                "<b>组件一致性</b>：输入框、下拉框、日期与时间框统一 38px 高、圆角与描边",
+                "<b>作息设置</b>：每一节之间加入分隔线，节次、起止时间与时长重新对齐",
+            ]),
+            ("修复", [
+                "空考试页残留上一场考试的「闭卷」「5 学分」标签",
+                "780px 高度下主页摘要卡与本周概览重叠",
+                "待办空状态说明只显示一行被截断",
+                "毛玻璃强度滑块拖动后背景延迟更新",
+                "主页时钟秒数过小、与分钟数字基线不齐",
+            ]),
+            ("说明", [
+                "60 项自动测试通过：核心 28 + 待办 / 更新日志 6 + GUI 26",
+            ]),
+        ],
+    ),
+    Release(
+        version="Beta 1.1",
+        date="2026-11-02",
+        headline="待办上线 · 关于与更新日志",
+        slogan="课表、考试、待办，终于住进了同一块玻璃。",
+        sections=[
+            ("新增", [
+                "<b>待办页</b>：每日 / 每周 / 一次性三种待办，支持截止日期、逾期红色提醒",
+                "<b>完成统计</b>：全部、已完成、未完成、完成度四项同字号数字，配一条全宽红绿进度条",
+                "<b>完成历史</b>：循环待办自动记录每次完成日期，月历里绿色高亮打卡日",
+                "<b>右键菜单</b>：查看完成记录、标记完成 / 未完成、删除此待办",
+                "<b>跨天重置</b>：每日待办第二天自动回到未完成，每周待办周一重置",
+                "<b>关于界面</b>：版本、发布日期、开发者，以及 GitHub 头像与 Logo，点击直达作者主页",
+                "<b>更新日志</b>：应用内随时回看每个版本，`update log/` 同步保存逐版本 txt",
+                "<b>拾光信息迁移</b>：关于界面的信息结构参考「拾光 ShiGuang」，并保留设计致敬说明",
+                "<b>时间屏幕主页</b>：大号时钟、按时段问候、今日课程 / 待办 / 考试摘要与本周概览",
+                "<b>全宽完成度条</b>：已完成绿色、未完成红色，每完成一项带缓动动画与轻量彩纸",
+                "<b>空白启动</b>：首次启动不再预置示例课表、考试或待办，从一张白纸开始",
+            ]),
+            ("变更", [
+                "<b>应用更名</b>：课表 · 期末 → <b>TonyDash学习终端</b>",
+                "<b>侧栏扩展</b>：主页 / 课程表 / 待办 / 期末考试 / 设置五页，快捷键 Ctrl+1–5",
+                "<b>界面留白</b>：窗口四周、侧栏与主卡之间增加呼吸间距，主卡内边距与圆角重新统一",
+                "<b>版本号</b>：Beta 1.1，数据格式升级到 v2（旧备份自动补全 tasks 字段）",
+            ]),
+            ("修复", [
+                "窗口缩放后，固定表头与课表列宽不同步的问题",
+                "考试卡片内容较高时互相重叠的问题",
+                "设置页滚动区压缩作息行、外观卡内容溢出的问题",
+                "全局 QSS 覆盖标题字号、下拉箭头糊成小圆点的问题",
+                "待办完成度数字小于其它统计数字、进度条颜色与宽度不符合预期的问题",
+                "待办日历打开整块黑底、日期框只能点右侧图标才弹日历的问题",
+                "主页卡片文字重影、待办列表刷新后出现旧卡片的问题",
+            ]),
+            ("说明", [
+                "56 项自动测试通过：核心 28 + 待办 / 更新日志 6 + GUI 22",
+            ]),
+        ],
+    ),
+    Release(
+        version="Beta 1.0",
+        date="2026-11-02",
+        headline="首个测试版 · 课表与考试",
+        slogan="先把课表和考试装进玻璃，再慢慢把大学生活补齐。",
+        sections=[
+            ("新增", [
+                "<b>课表管理</b>：按周切换，支持单双周、自定义周次、起止节次与上课时间",
+                "<b>课程编辑</b>：课程名称、老师、地点、颜色、备注，点击空白格子即可新增",
+                "<b>冲突检测</b>：同一时间、同一周次重叠的课程自动标红点并汇总提示",
+                "<b>固定表头</b>：滚动 12 节课表时，星期与日期始终固定在顶部",
+                "<b>期末考试</b>：倒计时、待考 / 进行中 / 已结束状态、复习进度与自定义字段",
+                "<b>考试提醒</b>：同场时间冲突、考试当天有课、未填地点都会给出提示",
+                "<b>学期设置</b>：学期名称、开学周一、总周数、12 节作息时间逐节可改",
+                "<b>本地数据</b>：自动保存到 `%APPDATA%\\CampusPlanner\\data.json`，支持 JSON 导入导出与 ICS 日历导出",
+                "<b>毛玻璃界面</b>：无边框圆角窗口、浅色亚克力卡片、8 套课程配色、打印样式",
+            ]),
+            ("修复", [
+                "考试卡片固定高度导致列表重叠",
+                "设置页滚动区把 12 行作息压成细线",
+                "全局样式覆盖所有 setFont 标题字号",
+                "下拉箭头、日期与时钟小图标渲染成圆点",
+            ]),
+            ("说明", [
+                "核心与界面共 40 项自动测试通过：周次、冲突、存储、ICS、弹窗保存、设置编辑、固定表头",
+            ]),
+        ],
+        app_name="课表 · 期末",
+    ),
+]
+
+TAG_COLORS = {
+    "新增": ("#E3F7E8", "#1E8C3A"),
+    "变更": ("#E3EEFF", "#0A66D0"),
+    "修复": ("#FFF1D6", "#B36A00"),
+    "移除": ("#FFE5E3", "#C4312A"),
+    "说明": ("#EFE9FF", "#6B4FD8"),
+}
+
+
+def latest() -> Release:
+    return RELEASES[0]
+
+
+def release_by_version(version: str) -> Release | None:
+    for rel in RELEASES:
+        if rel.version == version:
+            return rel
+    return None
+
+
+def changelog_html(version: str | None = None) -> str:
+    """生成与「拾光」同风格的更新日志 HTML（颜色跟随当前主题）。"""
+    t = theme.tokens()
+    text = theme.C_TEXT
+    sub = theme.C_SUB
+    blue = theme.C_BLUE
+    divider = theme.rgba_str(t["card_border"], 90)
+    tag_style = {
+        "新增": (theme.rgba_str((52, 199, 89), 44), theme.C_GREEN),
+        "变更": (theme.rgba_str((10, 132, 255), 44), blue),
+        "修复": (theme.rgba_str((255, 159, 10), 44), theme.C_AMBER),
+        "移除": (theme.rgba_str((255, 59, 48), 44), theme.C_RED),
+        "说明": (theme.rgba_str((176, 120, 220), 44), theme.C_PURPLE),
+    }
+    releases = [r for r in RELEASES if not version or r.version == version]
+    parts = [
+        "<style>",
+        'body { font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; }',
+        f"h1 {{ font-size: 15pt; color: {text}; margin: 4px 0 2px 0; }}",
+        f"h2 {{ font-size: 13pt; color: {blue}; margin: 18px 0 4px 0; }}",
+        f".ver {{ font-size: 10pt; color: {sub}; margin: 0 0 8px 0; }}",
+        ".tag { font-size: 9.5pt; font-weight: 600;"
+        " padding: 2px 7px; border-radius: 4px; }",
+        ".tagline { margin: 9px 0 2px 0; }",
+        "ul { margin: 2px 0 10px 0; padding-left: 20px; }",
+        f"li {{ margin: 3px 0; line-height: 1.6; color: {text}; font-size: 10.5pt; }}",
+        f".slogan {{ color: {sub}; font-size: 10.5pt;"
+        f" margin: 0 0 10px 0; }}",
+        f".divider {{ border: none; border-top: 1px solid {divider}; margin: 16px 0; }}",
+        "</style>",
+        f"<h1>{core.APP_NAME}</h1>",
+        f'<p class="slogan">{core.APP_SLOGAN}</p>',
+    ]
+    for index, rel in enumerate(releases):
+        if index:
+            parts.append('<hr class="divider">')
+        parts.append(
+            f'<h2>{rel.version} &nbsp;<span class="ver">{rel.date}'
+            f" &nbsp;·&nbsp; {rel.headline}</span></h2>"
+        )
+        parts.append(f'<p class="slogan">{rel.slogan}</p>')
+        for tag, items in rel.sections:
+            bg, fg = tag_style.get(tag, tag_style["变更"])
+            parts.append(
+                f'<p class="tagline"><span class="tag" '
+                f'style="background:{bg};color:{fg}">{tag}</span></p><ul>'
+            )
+            for item in items:
+                parts.append(f"<li>{item}</li>")
+            parts.append("</ul>")
+    parts.append(
+        f'<p style="text-align:center; color:{sub}; font-size:9.5pt; margin-top:18px;">'
+        f"—— {core.APP_NAME} · 把时间留给自己 ——</p>"
+    )
+    return "\n".join(parts)
+
+
+def release_plain_text(rel: Release) -> str:
+    lines = [
+        f"{rel.app_name or core.APP_NAME} {rel.version}",
+        f"发布日期：{rel.date}",
+        rel.headline,
+        rel.slogan,
+        "",
+    ]
+    for tag, items in rel.sections:
+        lines.append(f"【{tag}】")
+        for item in items:
+            clean = (
+                item.replace("<b>", "").replace("</b>", "")
+                .replace("`", "")
+            )
+            lines.append(f"- {clean}")
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def latest_summary(limit: int = 3, balanced: bool = False) -> list[str]:
+    rel = latest()
+    clean = lambda entry: entry.replace("<b>", "").replace("</b>", "").replace("`", "")  # noqa: E731
+    if not balanced:
+        items: list[str] = []
+        for tag, entries in rel.sections:
+            for entry in entries:
+                if len(items) >= limit:
+                    return items
+                items.append(f"{tag} · {clean(entry)}")
+        return items
+    # 轮转各节取条目，避免「最近更新」预览里清一色都是「新增」。
+    items = []
+    idx = 0
+    while len(items) < limit:
+        added = False
+        for tag, entries in rel.sections:
+            if idx < len(entries):
+                items.append(f"{tag} · {clean(entries[idx])}")
+                added = True
+                if len(items) >= limit:
+                    break
+        if not added:
+            break
+        idx += 1
+    return items

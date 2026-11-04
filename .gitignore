@@ -1,0 +1,75 @@
+# =============================================================================
+# TonyDash学习终端 — Git 忽略规则
+# 目标：上传 GitHub 时只包含源码 / 资源 / 文档 / 测试，
+#       不包含备份、实验目录、构建产物、缓存与临时测试数据。
+# =============================================================================
+
+# ---- 明确不参与上传（用户要求，永久忽略）----
+/backup/
+/lab/
+/.dsh/
+
+# ---- Python 缓存与虚拟环境 ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---- 打包 / 构建产物（PyInstaller、NSIS、发布包）----
+/build/
+/dist/
+/release/
+*.exe
+*.msi
+*.appx
+*.msix
+*.sfx
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.whl
+
+# ---- 测试临时数据与输出 ----
+/tests/__pycache__/
+/tests/_shots/
+/tests/_tmp/
+/tests/_run_tmp/
+/tests/_appdata*/
+/tests/_exe_appdata/
+/tests/_gui_appdata/
+/tests/_release_appdata/
+/tests/_perf*/
+/tests/_verify14/
+/tests/_MEI*/
+/tests/*.out
+/tests/_splash_log.txt
+/tests/_icon.out
+
+# ---- 日志与自检截图 ----
+*.log
+selftest*.png
+
+# ---- 其他缓存 ----
+/torchinductor_*/
+/pip-*/
+
+# ---- 操作系统 / 编辑器临时文件 ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+*.sublime-*

@@ -1,0 +1,6 @@
+# TonyDash学习终端 运行依赖
+# 安装：py -m pip install -r requirements.txt
+# 开发环境：Python 3.14 + PySide6 6.12
+PySide6>=6.5
+Pillow>=10.0
+numpy>=1.24
