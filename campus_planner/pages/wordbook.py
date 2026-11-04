@@ -3,7 +3,7 @@
 这个文件是**主程序侧的外壳**：lab 的两个页面只知道「有一个 Kit 和一个
 WordService」，不知道主程序的导航、主题切换和数据模型。外壳负责：
 
-* 建一套和主程序一致的页面头（``PageHeader``）；
+* 不加页头大标题，整块右侧区域全部留给功能本身（左栏已有导航名）；
 * 懒加载一份 ``WordService``（查词页与单词本页共用同一份存储，收藏后立刻能查到）；
 * 主程序切主题时重建页面（lab 页面把主题色写死在构造期，没有 ``sync_theme``）；
 * 关窗时停后台线程，避免 QThread 被销毁时仍在运行。
@@ -16,13 +16,12 @@ WordService」，不知道主程序的导航、主题切换和数据模型。外
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
-from .. import core, widgets
+from .. import core
 from ..labkit.ui import Kit, WordPage, WordbookPage
 from ..labkit.wordbook import api as wapi
-from . import common
 
 __all__ = ["WordPageHost", "WordbookPageHost", "service", "close_service"]
 
@@ -52,7 +51,7 @@ def close_service() -> None:
 
 
 class _WordbookShell(QWidget):
-    """查词页 / 单词本页共用的外壳。"""
+    """查词页 / 单词本页共用的外壳（不加页头，空间全留给功能）。"""
 
     #: 单词本内容变化（收藏 / 删除 / 备注 / 导入），供主窗口提示
     changed = Signal()
@@ -65,16 +64,12 @@ class _WordbookShell(QWidget):
         self._page: QWidget | None = None
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(12)
-        root.addWidget(self._make_header())
+        root.setSpacing(0)
         self._page = self._make_page()
         self._page.setStyleSheet("background: transparent;")
         root.addWidget(self._page, 1)
 
     # -- 子类实现
-    def _make_header(self) -> QWidget:
-        raise NotImplementedError
-
     def _make_page(self) -> QWidget:
         raise NotImplementedError
 
@@ -152,22 +147,12 @@ class _WordbookShell(QWidget):
 class WordPageHost(_WordbookShell):
     """词典查询页（独立导航项）。"""
 
-    def _make_header(self) -> QWidget:
-        return common.PageHeader(
-            "", "词典查询",
-            hint="输入单词查询释义，收藏后自动进入单词本；支持导出 / 导入 JSON")
-
     def _make_page(self) -> QWidget:
         return WordPage(service(), kit=self._kit)
 
 
 class WordbookPageHost(_WordbookShell):
     """单词本页（独立导航项，与查词页共用同一份存储）。"""
-
-    def _make_header(self) -> QWidget:
-        return common.PageHeader(
-            "", "单词本",
-            hint="收藏过的词都在这里，支持导出 / 导入 JSON；数据只保存在本机")
 
     def _make_page(self) -> QWidget:
         return WordbookPage(service(), kit=self._kit)
