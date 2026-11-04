@@ -9,6 +9,9 @@
 /lab/
 /.dsh/
 
+# ---- 主程序运行期数据（课表导入历史、词典缓存、发音、PDF 临时文件）----
+campus_planner/_data/
+
 # ---- Python 缓存与虚拟环境 ----
 __pycache__/
 *.py[cod]

@@ -16,9 +16,9 @@ from PySide6.QtWidgets import (
     QStackedWidget, QTimeEdit, QVBoxLayout, QWidget,
 )
 
-from . import core, dialogs, onboarding, theme, widgets
+from . import core, dialogs, onboarding, schedule_import, theme, widgets
 from .about_dialogs import AboutDialog
-from .pages import common, exams, home, schedule, settings, todo
+from .pages import common, exams, home, schedule, settings, todo, wordbook
 
 
 class TitleBar(QWidget):
@@ -132,8 +132,8 @@ class MainWindow(QWidget):
         self._radius = 18
         self._toast = widgets.ToastHost(self)
         # 页面懒加载状态
-        self._page_objs: list = [None, None, None, None, None]
-        self._page_built = [False, False, False, False, False]
+        self._page_objs: list = [None, None, None, None, None, None]
+        self._page_built = [False, False, False, False, False, False]
         self._theme_anim: QPropertyAnimation | None = None
 
         self._save_timer = QTimer(self)
@@ -185,12 +185,13 @@ class MainWindow(QWidget):
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         self.nav_buttons: list[widgets.NavButton] = []
-        self.nav_targets = [0, 1, 2, 3, 4]  # 主页 / 课表 / 待办 / 考试 / 设置
+        self.nav_targets = [0, 1, 2, 3, 4, 5]  # 主页 / 课表 / 待办 / 考试 / 设置 / 单词本
         for i, (icon, label) in enumerate((("home", "主页"),
                                            ("calendar", "课程表"),
                                            ("list", "待办"),
                                            ("report", "期末考试"),
-                                           ("gear", "设置"))):
+                                           ("gear", "设置"),
+                                           ("books", "单词本"))):
             target = self.nav_targets[i]
             b = widgets.NavButton(icon, label)
             b.setCheckable(True)
@@ -237,7 +238,7 @@ class MainWindow(QWidget):
         main.setSpacing(0)
         self.stack = QStackedWidget()
         self.stack.setStyleSheet("background: transparent;")
-        for _ in range(5):
+        for _ in range(6):
             placeholder = QWidget()
             placeholder.setStyleSheet("background: transparent;")
             self.stack.addWidget(placeholder)
@@ -256,8 +257,10 @@ class MainWindow(QWidget):
             page = todo.TaskPage()
         elif index == 3:
             page = exams.ExamPage()
-        else:
+        elif index == 4:
             page = settings.SettingsPage()
+        else:
+            page = wordbook.WordbookPageHost()
         page.setStyleSheet("background: transparent;")
         placeholder = self.stack.widget(index)
         self.stack.removeWidget(placeholder)
@@ -276,6 +279,7 @@ class MainWindow(QWidget):
             page.new_course.connect(self.new_course)
             page.edit_course.connect(self.edit_course)
             page.sample_action.connect(self._on_sample_action)
+            page.import_requested.connect(self.open_import_dialog)
         elif index == 2:
             page.changed.connect(self._on_todo_changed)
         elif index == 3:
@@ -285,6 +289,8 @@ class MainWindow(QWidget):
             page.delete_exam.connect(self.delete_exam)
             page.export_ics.connect(self.export_ics)
             page.refresh_requested.connect(self._sync_chrome)
+        elif index == 5:
+            page.changed.connect(self._on_wordbook_changed)
         else:
             page.changed.connect(self._on_settings_changed)
             page.glass_changed.connect(self._on_glass)
@@ -436,7 +442,7 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------ 导航
     def go(self, index: int):
-        index = core.clamp(index, 0, 4)
+        index = core.clamp(index, 0, 5)
         page = self._ensure_page(index)
         self.stack.setCurrentIndex(index)
         for i, b in enumerate(self.nav_buttons):
@@ -508,8 +514,8 @@ class MainWindow(QWidget):
         old = {}
         for index in built:
             old[index] = self.stack.widget(index)
-        self._page_objs = [None, None, None, None, None]
-        self._page_built = [False, False, False, False, False]
+        self._page_objs = [None, None, None, None, None, None]
+        self._page_built = [False, False, False, False, False, False]
         for index in built:
             w = old.get(index)
             if w is not None:
@@ -762,6 +768,34 @@ class MainWindow(QWidget):
             self.commit()
             self.toast("示例标记已移除", "ok")
 
+    # ------------------------------------------------------------ 课表导入
+    def open_import_dialog(self):
+        """从课表选项卡打开「导入课表」对话框（lab 的识别能力）。
+
+        对话框是模态的：识别 → 勾选 → 点「导入到课表」→ 写回 ``self.data``。
+        """
+        dialog = schedule_import.CourseImportDialog(self)
+        dialog.applied.connect(self._on_import_applied)
+        dialog.exec()
+
+    def _on_import_applied(self, payload) -> None:
+        try:
+            added = schedule_import.apply_import(self.data, payload)
+        except Exception as exc:  # noqa: BLE001 - 导入失败要提示，不能崩
+            self.toast(f"导入失败：{exc}", "err")
+            return
+        self.commit()
+        if added:
+            self.toast(f"已导入 {added} 门课程", "ok")
+        else:
+            self.toast("没有新增课程（可能已经导入过）", "info")
+
+    # ------------------------------------------------------------ 单词本
+    def _on_wordbook_changed(self):
+        # 单词本数据不进 data.json，只需保存它自己那份；refresh=False 避免
+        # 重建课表 / 待办页抢焦点。
+        self.commit(refresh=False)
+
     # ------------------------------------------------------------ 数据
     def export_json(self):
         default = str(Path.home() / f"课表备份-{date.today():%Y%m%d}.json")
@@ -916,6 +950,15 @@ class MainWindow(QWidget):
     def closeEvent(self, event):
         if self._save_timer.isActive():
             self._save_timer.stop()
+        # 单词本页面可能还有后台线程 / 音频在跑，先停干净再退出
+        if len(self._page_objs) > 5:
+            page = self._page_objs[5]
+            shutdown = getattr(page, "shutdown", None)
+            if callable(shutdown):
+                try:
+                    shutdown()
+                except Exception:  # noqa: BLE001 - 关窗时不要再抛错
+                    pass
         try:
             core.save_data(self.data)
         except OSError:

@@ -16,7 +16,7 @@ from pathlib import Path
 
 APP_NAME = "TonyDash学习终端"
 APP_SUBTITLE = "课表 · 考试 · 待办"
-APP_VERSION = "Beta 1.4"
+APP_VERSION = "Beta 1.5"
 APP_SLOGAN = "把课表、考试和待办，收进一块玻璃里"
 APP_AUTHOR = "xiaoyan2007"
 APP_GITHUB = "https://github.com/xiaoyan2007"

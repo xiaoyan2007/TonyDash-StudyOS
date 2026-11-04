@@ -350,6 +350,7 @@ class SchedulePage(QWidget):
     new_course = Signal(object)
     edit_course = Signal(object)
     sample_action = Signal(str)
+    import_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -370,6 +371,10 @@ class SchedulePage(QWidget):
         add = widgets.AppButton("新增课程", "plus", "primary", "md")
         add.clicked.connect(lambda: self.new_course.emit(None))
         self.header.add_action(add)
+        imp = widgets.AppButton("导入课表", "upload", "soft", "md")
+        imp.setToolTip("从 Excel / CSV / 截图 / 粘贴文本识别课程，勾选后一键导入")
+        imp.clicked.connect(lambda: self.import_requested.emit())
+        self.header.add_action(imp)
         root.addWidget(self.header)
 
         bar_card = widgets.GlassCard(radius=12, alpha=128)
