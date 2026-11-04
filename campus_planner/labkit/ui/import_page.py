@@ -79,9 +79,12 @@ class _ImportWorker(QObject):
                 rest = [item for item in self._targets if Path(item) not in images]
                 if rest:
                     results.append(api.parse_many(rest, progress=on_progress))
-                from .merge import merge_results  # noqa: PLC0415 - 只有多来源时才需要
-
-                result = merge_results(results, source="merged")
+                if len(results) == 1:
+                    # 单来源：保留它自己的 source（ocr / excel / csv…）
+                    result = results[0]
+                else:
+                    from ..ttimport.merge import merge_results  # noqa: PLC0415
+                    result = merge_results(results, source="merged")
             elif len(self._targets) > 1:
                 result = api.parse_many(self._targets, progress=on_progress)
             else:

@@ -23,7 +23,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 from . import parser as P
 from .models import WordEntry
@@ -98,10 +98,20 @@ class YoudaoClient:
                     pass
             return body, int(getattr(resp, "status", 200) or 200)
 
-    def _request(self, url: str, *, accept: str, what: str) -> bytes:
-        """带节流 + 退避重试的 GET。"""
+    def _request(self, url: str, *, accept: str, what: str,
+                 on_progress: Callable[[int, str], None] | None = None) -> bytes:
+        """带节流 + 退避重试的 GET。
+
+        ``on_progress(pct, text)`` 在**每次重试前**回调一次（25/35/45…），
+        让界面在等待网络时能看到百分比在动，而不是卡在一句静态文案上。
+        """
         last: Exception | None = None
         for attempt in range(self.retries + 1):
+            if on_progress is not None:
+                try:
+                    on_progress(25 + attempt * 10, f"正在请求{what}…（第 {attempt + 1} 次）")
+                except Exception:  # noqa: BLE001 - 进度回调出错不该影响请求本身
+                    pass
             self._throttle()
             try:
                 body, status = self._open(url, accept=accept)
@@ -129,7 +139,7 @@ class YoudaoClient:
         raise last if last is not None else YoudaoError(f"{what} 失败")
 
     # ------------------------------------------------------------------ 查询
-    def query_json(self, word: str) -> dict:
+    def query_json(self, word: str, *, on_progress: Callable[[int, str], None] | None = None) -> dict:
         """取原始 JSON（``jsonapi``）。
 
         **空查询在本地就拒绝**：有道对空串会返回单词 ``null`` 的完整词条。
@@ -138,7 +148,8 @@ class YoudaoClient:
         if not norm:
             raise YoudaoError("查询内容为空")
         url = P.JSONAPI_URL.format(query=urllib.parse.quote(norm))
-        body = self._request(url, accept="application/json", what="查询")
+        body = self._request(url, accept="application/json", what="查询",
+                             on_progress=on_progress)
         try:
             raw = json.loads(body.decode("utf-8", "replace"))
         except (json.JSONDecodeError, ValueError) as exc:
@@ -147,9 +158,10 @@ class YoudaoClient:
             raise YoudaoError("返回内容格式异常")
         return raw
 
-    def query(self, word: str, *, limit_sents: int = 12) -> WordEntry:
+    def query(self, word: str, *, limit_sents: int = 12,
+              on_progress: Callable[[int, str], None] | None = None) -> WordEntry:
         """查询并解析成 :class:`WordEntry`。"""
-        raw = self.query_json(word)
+        raw = self.query_json(word, on_progress=on_progress)
         entry = P.parse_entry(raw, query=word, limit_sents=limit_sents)
         entry.raw_size = len(json.dumps(raw, ensure_ascii=False))
         return entry
@@ -168,7 +180,8 @@ class YoudaoClient:
         return P.parse_suggest(raw)
 
     # ------------------------------------------------------------------ 发音
-    def fetch_voice(self, token: str, accent: str = "uk") -> bytes | None:
+    def fetch_voice(self, token: str, accent: str = "uk",
+                    on_progress: Callable[[int, str], None] | None = None) -> bytes | None:
         """下载发音 mp3。
 
         某个口音 500 是**正常的**（覆盖不对称），所以调用方失败后应换口音再试一次；
@@ -178,7 +191,8 @@ class YoudaoClient:
         if not url:
             return None
         try:
-            body = self._request(url, accept="audio/mpeg,*/*", what="发音")
+            body = self._request(url, accept="audio/mpeg,*/*", what="发音",
+                                 on_progress=on_progress)
         except YoudaoError:
             return None
         if not body or len(body) < 256:
@@ -187,13 +201,14 @@ class YoudaoClient:
             self.stats["voice"] += 1
         return body
 
-    def fetch_voice_any(self, entry: WordEntry, accents: tuple[str, ...] = ("uk", "us")) -> tuple[str, bytes] | None:
+    def fetch_voice_any(self, entry: WordEntry, accents: tuple[str, ...] = ("uk", "us"),
+                        on_progress: Callable[[int, str], None] | None = None) -> tuple[str, bytes] | None:
         """依次尝试多个口音，返回 ``(口音, mp3 字节)``。"""
         for accent in accents:
             token = entry.voice_token(accent)
             if not token:
                 continue
-            data = self.fetch_voice(token, accent)
+            data = self.fetch_voice(token, accent, on_progress=on_progress)
             if data:
                 return accent, data
         return None

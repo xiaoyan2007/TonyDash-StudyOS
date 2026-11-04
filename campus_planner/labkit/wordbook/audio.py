@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from ..common import paths
 
@@ -85,7 +85,8 @@ class AudioStore:
         return removed
 
     # ------------------------------------------------------------------ 下载
-    def ensure(self, entry: WordEntry, client: YoudaoClient, accents: tuple[str, ...] = ("uk", "us")) -> dict[str, str]:
+    def ensure(self, entry: WordEntry, client: YoudaoClient, accents: tuple[str, ...] = ("uk", "us"),
+               on_progress: Callable[[int, str], None] | None = None) -> dict[str, str]:
         """确保这个词的发音在本地；返回更新后的 ``audio_files`` 映射。
 
         * 已经有本地文件 → 直接记录路径，不发请求；
@@ -99,7 +100,7 @@ class AudioStore:
                 files[accent] = self.rel_for(norm, accent)
         missing = [a for a in accents if a not in files and entry.voice_token(a)]
         if missing and client is not None:
-            got = client.fetch_voice_any(entry, accents=tuple(missing))
+            got = client.fetch_voice_any(entry, accents=tuple(missing), on_progress=on_progress)
             if got:
                 accent, data = got
                 self.save(norm, accent, data)

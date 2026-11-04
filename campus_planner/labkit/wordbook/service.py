@@ -17,6 +17,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from . import parser as P
 from .audio import AudioStore
@@ -75,8 +76,20 @@ class WordService:
         self._recent: dict[str, WordEntry] = {}
 
     # ------------------------------------------------------------------ 查询
-    def lookup(self, query: str, *, use_cache: bool = True, want_voice: bool = False) -> LookupResult:
+    def lookup(self, query: str, *, use_cache: bool = True, want_voice: bool = False,
+               on_progress: Callable[[int, str], None] | None = None) -> LookupResult:
         started = time.perf_counter()
+
+        def emit(pct: int, text: str) -> None:
+            """进度回调：界面在等网络时能看到百分比在动（失败静默）。"""
+            if on_progress is None:
+                return
+            try:
+                on_progress(int(pct), text)
+            except Exception:  # noqa: BLE001 - 回调异常不该影响查询
+                pass
+
+        emit(5, "开始查询…")
         norm = P.normalize(query)
         if not norm:
             return LookupResult(
@@ -89,6 +102,7 @@ class WordService:
         if use_cache:
             hit = self.cache.get(norm)
             if hit is not None:
+                emit(100, "缓存命中")
                 return LookupResult(
                     entry=hit,
                     from_cache=True,
@@ -98,20 +112,25 @@ class WordService:
         # 2) 联网
         error = ""
         if self.client is not None:
+            emit(20, "连接有道词典…")
             try:
-                entry = self.client.query(norm)
+                entry = self.client.query(norm, on_progress=on_progress)
                 if entry.found:
+                    emit(80, "整理释义…")
                     self.cache.put(entry)
                     self._recent[norm] = entry
+                    emit(100, "查询完成")
                     return LookupResult(
                         entry=entry,
                         elapsed_ms=int((time.perf_counter() - started) * 1000),
                     )
                 # 查无此词：给联想建议（拼错时这一步最有用）。
                 # 优先用 suggest 接口（带解释），失败再退回响应里的 typos 候选词。
+                emit(70, "准备联想词…")
                 suggestions = self.suggest(norm)
                 if not suggestions and entry.suggestions:
                     suggestions = [(word, "") for word in entry.suggestions]
+                emit(100, "词典没有收录这个词")
                 return LookupResult(
                     entry=entry,
                     suggestions=suggestions,
@@ -123,8 +142,10 @@ class WordService:
                 error = f"查询失败：{exc}"
 
         # 3) 已收藏的词条
+        emit(60, "尝试本地收藏…")
         saved = self.wordbook.get(norm)
         if saved is not None and saved.found:
+            emit(100, "显示本地收藏的词条")
             return LookupResult(
                 entry=saved,
                 from_offline=True,
@@ -133,8 +154,10 @@ class WordService:
             )
 
         # 4) 本地词库
+        emit(75, "查本地词库…")
         local = self.offline.lookup(norm) if self.offline is not None else None
         if local is not None:
+            emit(100, "显示本地词库释义")
             return LookupResult(
                 entry=local,
                 from_offline=True,
@@ -146,6 +169,7 @@ class WordService:
         message = error or "词典没有收录这个词，也没有本地词库可兜底"
         if not self.offline.available():
             message += f"；{self.offline.describe()}"
+        emit(100, "查询失败")
         return LookupResult(
             entry=P.make_missing(norm),
             error=message,
@@ -172,7 +196,8 @@ class WordService:
     def search_saved(self, keyword: str) -> list[WordEntry]:
         return self.wordbook.search(keyword)
 
-    def add(self, entry: WordEntry, *, want_audio: bool = True) -> tuple[bool, str]:
+    def add(self, entry: WordEntry, *, want_audio: bool = True,
+            on_progress: Callable[[int, str], None] | None = None) -> tuple[bool, str]:
         """收藏一个词条（含发音落盘）；返回 ``(是否新词, 提示文本)``。
 
         收藏失败的唯一情况是「词典没收录」——那没有可保存的内容。
@@ -184,15 +209,30 @@ class WordService:
             return False, "词条内容异常，无法收藏"
         messages: list[str] = []
         if want_audio and entry.has_audio:
+            if on_progress is not None:
+                try:
+                    on_progress(10, "下载发音…")
+                except Exception:  # noqa: BLE001
+                    pass
             before = dict(entry.audio_files or {})
-            entry.audio_files = self.audio.ensure(entry, self.client)
+            entry.audio_files = self.audio.ensure(entry, self.client, on_progress=on_progress)
             if entry.audio_files and entry.audio_files != before:
                 messages.append("发音已保存到本地")
             elif not entry.audio_files:
                 messages.append("发音下载失败，已保存文字内容")
         if entry.fetched_at == 0:
             entry.fetched_at = int(time.time())
+        if on_progress is not None:
+            try:
+                on_progress(95, "写入单词本…")
+            except Exception:  # noqa: BLE001
+                pass
         is_new = self.wordbook.add(entry)
+        if on_progress is not None:
+            try:
+                on_progress(100, "已加入单词本")
+            except Exception:  # noqa: BLE001
+                pass
         return is_new, "，".join(messages)
 
     def remove(self, query: str) -> bool:
@@ -238,8 +278,10 @@ class WordService:
                 return path
         return None
 
-    def ensure_audio(self, entry: WordEntry, accents: tuple[str, ...] = ("uk", "us")) -> dict[str, str]:
-        entry.audio_files = self.audio.ensure(entry, self.client, accents)
+    def ensure_audio(self, entry: WordEntry, accents: tuple[str, ...] = ("uk", "us"),
+                     on_progress: Callable[[int, str], None] | None = None) -> dict[str, str]:
+        entry.audio_files = self.audio.ensure(entry, self.client, accents,
+                                              on_progress=on_progress)
         return entry.audio_files
 
     # ------------------------------------------------------------------ 状态

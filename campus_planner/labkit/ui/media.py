@@ -85,9 +85,14 @@ class AudioPlayer(QObject):
 
 
 class LookupWorker(QThread):
-    """后台查词：``done`` 一定带一个 ``LookupResult``（异常也包成结果，界面不用 try）。"""
+    """后台查词：``done`` 一定带一个 ``LookupResult``（异常也包成结果，界面不用 try）。
+
+    ``progress(int 百分比, str 说明)`` 从后台线程发出，主线程排队接收后刷新进度条，
+    网络抖动时界面也能看到进度在走，而不是卡在一句静态文案上。
+    """
 
     done = Signal(object)
+    progress = Signal(int, str)
 
     def __init__(self, service, query: str, *, use_cache: bool = True, parent=None):
         super().__init__(parent)
@@ -98,8 +103,12 @@ class LookupWorker(QThread):
     def run(self) -> None:  # noqa: D102 - QThread 入口
         from ..wordbook.service import LookupResult
 
+        def report(pct, text):
+            self.progress.emit(int(pct), str(text))
+
         try:
-            result = self.service.lookup(self.query, use_cache=self.use_cache)
+            result = self.service.lookup(self.query, use_cache=self.use_cache,
+                                         on_progress=report)
         except Exception as exc:  # noqa: BLE001 - 兜底：绝不让线程异常冒到 Qt 层
             result = LookupResult(error=f"查询出错：{type(exc).__name__}: {exc}")
         self.done.emit(result)
@@ -109,6 +118,7 @@ class AudioFetchWorker(QThread):
     """后台把某个口音的发音落到本地，然后回报绝对路径（拿不到就回报空串）。"""
 
     done = Signal(str, str)  # (accent, 本地绝对路径 或 "")
+    progress = Signal(int, str)
 
     def __init__(self, service, entry, accent: str, parent=None):
         super().__init__(parent)
@@ -118,8 +128,13 @@ class AudioFetchWorker(QThread):
 
     def run(self) -> None:  # noqa: D102 - QThread 入口
         rel = ""
+
+        def report(pct, text):
+            self.progress.emit(int(pct), str(text))
+
         try:
-            files = self.service.ensure_audio(self.entry, accents=(self.accent,))
+            files = self.service.ensure_audio(self.entry, accents=(self.accent,),
+                                              on_progress=report)
             rel = (files or {}).get(self.accent, "")
             if not rel:
                 kind, value = self.service.audio_source(self.entry, self.accent)
@@ -135,6 +150,7 @@ class SaveWorker(QThread):
     """后台收藏（顺带下载发音）。"""
 
     done = Signal(bool, str)
+    progress = Signal(int, str)
 
     def __init__(self, service, entry, *, want_audio: bool = True, parent=None):
         super().__init__(parent)
@@ -143,8 +159,12 @@ class SaveWorker(QThread):
         self.want_audio = want_audio
 
     def run(self) -> None:  # noqa: D102 - QThread 入口
+        def report(pct, text):
+            self.progress.emit(int(pct), str(text))
+
         try:
-            is_new, message = self.service.add(self.entry, want_audio=self.want_audio)
+            is_new, message = self.service.add(self.entry, want_audio=self.want_audio,
+                                               on_progress=report)
         except Exception as exc:  # noqa: BLE001
             is_new, message = False, f"收藏失败：{type(exc).__name__}: {exc}"
         self.done.emit(is_new, message)

@@ -15,7 +15,9 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout, QProgressBar, QScrollArea, QVBoxLayout, QWidget,
+)
 
 from ..wordbook import api as wapi
 from .entry_view import EntryView
@@ -73,6 +75,26 @@ class WordPage(QWidget):
 
         self.status = self.kit.text("", 11.5, self.theme.C_MUTED, wrap=True)
         lay.addWidget(self.status)
+
+        # 百分比进度条：查词 / 收藏都可能在等网络，界面不能卡在一句静态文案上
+        bar_row = QHBoxLayout()
+        bar_row.setContentsMargins(0, 0, 0, 0)
+        bar_row.setSpacing(8)
+        self.progress_bar = QProgressBar(card)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setFixedHeight(8)
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setStyleSheet(
+            "QProgressBar{background:rgba(255,255,255,170);border:none;border-radius:4px;}"
+            f"QProgressBar::chunk{{background:{self.theme.C_BLUE};border-radius:4px;}}"
+        )
+        self.progress_label = self.kit.text("", 10.5, self.theme.C_SUB)
+        self.progress_label.setVisible(False)
+        bar_row.addWidget(self.progress_bar, 1)
+        bar_row.addWidget(self.progress_label)
+        lay.addLayout(bar_row)
         return card
 
     def _build_result_card(self) -> QWidget:
@@ -143,6 +165,18 @@ class WordPage(QWidget):
         else:
             self.btn_query.setText("查词")
 
+    def _show_progress(self, percent: int, text: str) -> None:
+        """刷新百分比进度条（percent 由后台线程经信号排队传来）。"""
+        pct = max(0, min(100, int(percent)))
+        self.progress_bar.setValue(pct)
+        self.progress_label.setText(f"{pct}%　{text}" if text else f"{pct}%")
+        self.progress_bar.setVisible(True)
+        self.progress_label.setVisible(True)
+
+    def _hide_progress(self) -> None:
+        self.progress_bar.setVisible(False)
+        self.progress_label.setVisible(False)
+
     # ------------------------------------------------------------------ 行为
     def lookup_word(self, word: str) -> None:
         self.search.setText(word)
@@ -157,13 +191,16 @@ class WordPage(QWidget):
             return
         self._busy(True)
         self._set_status(f"正在查询「{query}」…")
+        self._show_progress(0, "准备中…")
         worker = LookupWorker(self.service, query, parent=self)
+        worker.progress.connect(self._show_progress)
         worker.done.connect(self._on_result)
         worker.finished.connect(lambda w=worker: self._busy(False))
         self._worker = worker
         worker.start()
 
     def _on_result(self, result) -> None:
+        self._hide_progress()
         self.result = result
         entry = result.entry
         self.empty.setVisible(not (entry and entry.found))
@@ -188,12 +225,15 @@ class WordPage(QWidget):
         if self._save_worker is not None and self._save_worker.isRunning():
             return
         self._set_status("正在收藏（顺带把发音存到本地）…")
+        self._show_progress(0, "准备中…")
         worker = SaveWorker(self.service, entry, want_audio=True, parent=self)
+        worker.progress.connect(self._show_progress)
         worker.done.connect(self._on_saved)
         self._save_worker = worker
         worker.start()
 
     def _on_saved(self, is_new: bool, message: str) -> None:
+        self._hide_progress()
         entry = getattr(self.view, "entry", None)
         saved = bool(entry is not None and self.service.is_saved(entry.norm))
         if entry is not None:
@@ -218,6 +258,7 @@ class WordPage(QWidget):
         self.audio.play(entry, accent)
 
     def clear(self) -> None:
+        self._hide_progress()
         self.search.clear()
         self.view.clear()
         self.empty.setVisible(True)
