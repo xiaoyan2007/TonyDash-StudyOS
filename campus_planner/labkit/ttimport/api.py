@@ -279,19 +279,26 @@ def build_periods(result: ImportResult, *, period_cls: Callable[..., Any] | None
 
 
 def to_payload(result: ImportResult, *, selected_only: bool = True) -> dict:
-    """序列化成 JSON 友好的结构（独立 schema，便于人工检查与回滚）。"""
+    """序列化成 JSON 友好的结构（独立 schema，便于人工检查与回滚）。
+
+    **必须带全 :class:`DraftCourse` 的原始字段**（尤其 ``mode`` / ``weeks_text`` /
+    ``parity`` / ``week_list``）：``to_core_kwargs()`` 只是给主程序 ``Course``
+    用的翻译结果，它把周次压成 ``{"mode","text"}``，单/双周与原始文本都会丢。
+    子进程（OCR）正是靠这份 JSON 往返还原对象，少一个字段周次就退化成「全周」。
+    """
     courses = result.selected if selected_only else result.courses
     return {
-        "schema": 1,
+        "schema": 2,
         "source": result.source,
         "totalWeeks": result.total_weeks,
         "stats": dict(result.stats),
         "warnings": list(result.warnings),
         "meta": {k: v for k, v in result.meta.items() if k != "cell_text"},
-        "courses": [dict(course.to_core_kwargs(), weekday=course.weekday_name,
+        "courses": [dict(course.to_dict(),
+                         weekday=course.weekday_name,
                          weeksLabel=course.weeks_label(result.total_weeks),
                          periodsLabel=course.periods_label,
-                         issues=list(course.issues), raw=course.raw)
+                         issues=list(course.issues))
                     for course in courses],
         "periods": [dict(item) for item in result.periods],
     }
@@ -303,6 +310,9 @@ def from_payload(payload: dict) -> ImportResult:
     主要给 **OCR 子进程**用：onnxruntime 只能在 ``lab/.venv`` 里跑，
     子进程解析完把 :func:`to_payload` 的 JSON 交回主进程，主进程再还原成
     中间模型 —— 这样界面层（预览表格 / 勾选 / 导出）完全不用改。
+
+    兼容旧 schema=1 的载荷（那时用 ``to_core_kwargs`` 序列化，只有
+    ``weeks={"mode","text"}``）：把 ``weeks`` 拆成 ``mode`` / ``weeks_text`` 补回来。
 
     还原出来的课程不重跑 :meth:`ImportResult.finalize`：``to_payload`` 之前
     已经收尾过，重复收尾虽然幂等但会再花一遍时间，用户改完格子时界面
@@ -318,8 +328,13 @@ def from_payload(payload: dict) -> ImportResult:
     )
     fields = DraftCourse.__dataclass_fields__
     for item in payload.get("courses") or []:
-        # to_payload 额外塞了 weekday / weeksLabel / periodsLabel，跳过即可
-        result.courses.append(DraftCourse(**{k: v for k, v in item.items() if k in fields}))
+        data = {k: v for k, v in item.items() if k in fields}
+        if "weeks" in item and isinstance(item["weeks"], dict):
+            # 旧 schema=1 的兼容路径
+            weeks = item["weeks"]
+            data.setdefault("mode", str(weeks.get("mode") or "all"))
+            data.setdefault("weeks_text", str(weeks.get("text") or ""))
+        result.courses.append(DraftCourse(**data))
     return result
 
 

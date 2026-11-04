@@ -56,7 +56,7 @@ class HomePage(QWidget):
         top.setContentsMargins(0, 0, 0, 0)
         top.setSpacing(8)
         self.eyebrow = QLabel()
-        self.eyebrow.setFont(theme.font(12, theme.QFont.Weight.DemiBold))
+        self.eyebrow.setFont(theme.font(15, theme.QFont.Weight.DemiBold))
         self.eyebrow.setStyleSheet(f"color: {theme.C_BLUE}; background: transparent;")
         top.addWidget(self.eyebrow)
         top.addStretch(1)

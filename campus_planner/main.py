@@ -33,18 +33,22 @@ class TitleBar(QWidget):
 
         mark = widgets.IconBadge("cap", 30)
         lay.addWidget(mark)
-        brand = QVBoxLayout()
-        brand.setContentsMargins(0, 0, 0, 0)
-        brand.setSpacing(0)
+        # 软件名 + 理念：软件名用大字号，理念以略小的淡灰小字附在右侧。
+        brand = QWidget()
+        brand.setStyleSheet("background: transparent;")
+        brand_lay = QHBoxLayout(brand)
+        brand_lay.setContentsMargins(0, 0, 0, 0)
+        brand_lay.setSpacing(9)
         self.brand_name = QLabel(core.APP_NAME)
-        self.brand_name.setFont(theme.font(15, theme.QFont.Weight.DemiBold))
+        self.brand_name.setFont(theme.font(18, theme.QFont.Weight.DemiBold))
         self.brand_name.setStyleSheet(f"color: {theme.C_TEXT}; background: transparent;")
-        brand.addWidget(self.brand_name)
+        brand_lay.addWidget(self.brand_name)
         self.sub = QLabel(core.APP_SUBTITLE)
         self.sub.setFont(theme.font(11.5))
         self.sub.setStyleSheet(f"color: {theme.C_SUB}; background: transparent;")
-        brand.addWidget(self.sub)
-        lay.addLayout(brand)
+        brand_lay.addWidget(self.sub)
+        brand_lay.addStretch(0)
+        lay.addWidget(brand, 0, Qt.AlignmentFlag.AlignVCenter)
         lay.addStretch(1)
 
         self.theme_btn = widgets.AppButton("", "moon", "ghost", "icon")
@@ -132,9 +136,12 @@ class MainWindow(QWidget):
         self._radius = 18
         self._toast = widgets.ToastHost(self)
         # 页面懒加载状态
-        self._page_objs: list = [None, None, None, None, None, None]
-        self._page_built = [False, False, False, False, False, False]
+        self._page_objs: list = [None] * 8
+        self._page_built = [False] * 8
         self._theme_anim: QPropertyAnimation | None = None
+        # 新手引导状态必须早于 _build()/go() 初始化：__init__ 里就会调 go(0)
+        self._coach: onboarding.CoachOverlay | None = None
+        self._navigating_for_coach = False
 
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
@@ -160,7 +167,6 @@ class MainWindow(QWidget):
         self._day_timer.setInterval(60_000)
         self._day_timer.timeout.connect(self._check_day_rollover)
         self._day_timer.start()
-        self._coach: onboarding.CoachOverlay | None = None
 
     # ------------------------------------------------------------ 构建
     def _build(self):
@@ -185,13 +191,16 @@ class MainWindow(QWidget):
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         self.nav_buttons: list[widgets.NavButton] = []
-        self.nav_targets = [0, 1, 2, 3, 4, 5]  # 主页 / 课表 / 待办 / 考试 / 设置 / 单词本
+        self.nav_targets = [0, 1, 2, 3, 4, 5, 6, 7]
+        # 主页 / 课程表 / 待办 / 期末考试 / 课表导入 / 词典查询 / 单词本 / 设置
         for i, (icon, label) in enumerate((("home", "主页"),
                                            ("calendar", "课程表"),
                                            ("list", "待办"),
                                            ("report", "期末考试"),
-                                           ("gear", "设置"),
-                                           ("books", "单词本"))):
+                                           ("upload", "课表导入"),
+                                           ("search", "词典查询"),
+                                           ("books", "单词本"),
+                                           ("gear", "设置"))):
             target = self.nav_targets[i]
             b = widgets.NavButton(icon, label)
             b.setCheckable(True)
@@ -238,14 +247,14 @@ class MainWindow(QWidget):
         main.setSpacing(0)
         self.stack = QStackedWidget()
         self.stack.setStyleSheet("background: transparent;")
-        for _ in range(6):
+        for _ in range(8):
             placeholder = QWidget()
             placeholder.setStyleSheet("background: transparent;")
             self.stack.addWidget(placeholder)
         main.addWidget(self.stack)
         body.addWidget(self.main_card, 1)
 
-    # 页面按需构建：启动时只占位，避免一次性构造 5 个页面拖慢显示。
+    # 页面按需构建：启动时只占位，避免一次性构造所有页面拖慢显示。
     def _ensure_page(self, index: int):
         if self._page_built[index]:
             return self._page_objs[index]
@@ -258,9 +267,13 @@ class MainWindow(QWidget):
         elif index == 3:
             page = exams.ExamPage()
         elif index == 4:
-            page = settings.SettingsPage()
-        else:
+            page = schedule_import.ScheduleImportPage()
+        elif index == 5:
+            page = wordbook.WordPageHost()
+        elif index == 6:
             page = wordbook.WordbookPageHost()
+        else:
+            page = settings.SettingsPage()
         page.setStyleSheet("background: transparent;")
         placeholder = self.stack.widget(index)
         self.stack.removeWidget(placeholder)
@@ -279,7 +292,7 @@ class MainWindow(QWidget):
             page.new_course.connect(self.new_course)
             page.edit_course.connect(self.edit_course)
             page.sample_action.connect(self._on_sample_action)
-            page.import_requested.connect(self.open_import_dialog)
+            page.import_requested.connect(lambda: self.go(4, animate=True))
         elif index == 2:
             page.changed.connect(self._on_todo_changed)
         elif index == 3:
@@ -289,7 +302,12 @@ class MainWindow(QWidget):
             page.delete_exam.connect(self.delete_exam)
             page.export_ics.connect(self.export_ics)
             page.refresh_requested.connect(self._sync_chrome)
+        elif index == 4:
+            page.applied.connect(self._on_import_applied)
         elif index == 5:
+            # 词典查询页：只读共享 service，不写 data.json
+            pass
+        elif index == 6:
             page.changed.connect(self._on_wordbook_changed)
         else:
             page.changed.connect(self._on_settings_changed)
@@ -327,7 +345,19 @@ class MainWindow(QWidget):
 
     @property
     def settings_page(self):
+        return self._ensure_page(7)
+
+    @property
+    def import_page(self):
         return self._ensure_page(4)
+
+    @property
+    def word_page(self):
+        return self._ensure_page(5)
+
+    @property
+    def wordbook_page(self):
+        return self._ensure_page(6)
 
     # ------------------------------------------------------------ 上手引导
     def start_onboarding(self, force: bool = False):
@@ -346,7 +376,12 @@ class MainWindow(QWidget):
         self._coach.start()
 
     def _onboard_go(self, page: int):
-        self.go(page)
+        # 引导自己的步骤跳转期间，go() 不应把引导层收掉
+        self._navigating_for_coach = True
+        try:
+            self.go(page)
+        finally:
+            self._navigating_for_coach = False
         self.raise_()
         if self._coach is not None:
             self._coach.raise_()
@@ -403,7 +438,16 @@ class MainWindow(QWidget):
         if self._backdrop is None:
             self._rebuild_backdrop()
         if not self.data.settings.onboarded and self._coach is None:
-            QTimer.singleShot(320, self.start_onboarding)
+            QTimer.singleShot(320, self._maybe_start_onboarding)
+
+    def _maybe_start_onboarding(self):
+        """延迟启动引导前再确认一次：用户已经开始用别的页面时不要打断他。"""
+        if self.data.settings.onboarded or self._coach is not None:
+            return
+        if self.stack.currentIndex() != 0:
+            # 用户已经主动切走（例如点了「导入课表」），不抢导航
+            return
+        self.start_onboarding()
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -441,14 +485,50 @@ class MainWindow(QWidget):
         p.end()
 
     # ------------------------------------------------------------ 导航
-    def go(self, index: int):
-        index = core.clamp(index, 0, 5)
+    def go(self, index: int, animate: bool = False):
+        index = core.clamp(index, 0, 7)
+        # 用户主动切换页面时，引导层必须让位：它会在自己的步骤里调 go()，
+        # 若继续驱动导航，刚跳到的页面会被它下一步"抢"回主页。
+        if not self._navigating_for_coach and self._coach is not None:
+            self._dismiss_coach_for_navigation()
         page = self._ensure_page(index)
         self.stack.setCurrentIndex(index)
         for i, b in enumerate(self.nav_buttons):
             b.setChecked(self.nav_targets[i] == index)
         self._apply_page_data(index, page)
         self._sync_chrome()
+        if animate:
+            self._animate_page_in(page)
+
+    def _dismiss_coach_for_navigation(self) -> None:
+        """导航时静默收起新手引导（不算"完成"，下次启动还会提示）。"""
+        coach = self._coach
+        self._coach = None
+        if coach is not None:
+            try:
+                coach.hide()
+                coach.deleteLater()
+            except Exception:  # noqa: BLE001 - 收引导失败不该影响导航
+                pass
+
+    def _animate_page_in(self, page: QWidget) -> None:
+        """新页面淡入：课表导入等跳转走「原窗口动画」，而不是另开一个窗口。"""
+        old = getattr(self, "_page_anim", None)
+        if old is not None and old.state() == QAbstractAnimation.State.Running:
+            old.stop()
+        effect = QGraphicsOpacityEffect(page)
+        effect.setOpacity(0.0)
+        page.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(effect, b"opacity", self, duration=260)
+        anim.setStartValue(0.0)
+        anim.setEndValue(1.0)
+
+        def _cleanup(e=effect):
+            e.deleteLater()
+
+        anim.finished.connect(_cleanup)
+        self._page_anim = anim
+        anim.start()
 
     def _sync_chrome(self):
         d = self.data
@@ -514,8 +594,8 @@ class MainWindow(QWidget):
         old = {}
         for index in built:
             old[index] = self.stack.widget(index)
-        self._page_objs = [None, None, None, None, None, None]
-        self._page_built = [False, False, False, False, False, False]
+        self._page_objs = [None] * 8
+        self._page_built = [False] * 8
         for index in built:
             w = old.get(index)
             if w is not None:
@@ -556,7 +636,7 @@ class MainWindow(QWidget):
         self.data.settings.theme_mode = new_mode
         self._apply_theme(rebuild=True)
         # 仅当设置页已构建时才同步分段控件，避免切换主题时顺带构造整页
-        if self._page_built[4]:
+        if self._page_built[7]:
             self.settings_page.sync_theme()
         self._save_timer.start()
         if shot is None or shot.isNull():
@@ -595,7 +675,7 @@ class MainWindow(QWidget):
         for index, page in enumerate(self._page_objs):
             # 设置页不在此处刷新：它的 changed 信号会重新进入这里，
             # 否则每次编辑作息都会重建整页、抢走正在输入的焦点。
-            if page is not None and index != 4:
+            if page is not None and index != 7:
                 self._apply_page_data(index, page)
 
     def _on_settings_changed(self):
@@ -770,13 +850,11 @@ class MainWindow(QWidget):
 
     # ------------------------------------------------------------ 课表导入
     def open_import_dialog(self):
-        """从课表选项卡打开「导入课表」对话框（lab 的识别能力）。
+        """从课程表页「导入课表」按钮跳转。
 
-        对话框是模态的：识别 → 勾选 → 点「导入到课表」→ 写回 ``self.data``。
+        不再另开窗口：原窗口内动画跳到「课表导入」导航页。
         """
-        dialog = schedule_import.CourseImportDialog(self)
-        dialog.applied.connect(self._on_import_applied)
-        dialog.exec()
+        self.go(4, animate=True)
 
     def _on_import_applied(self, payload) -> None:
         try:
@@ -789,11 +867,13 @@ class MainWindow(QWidget):
             self.toast(f"已导入 {added} 门课程", "ok")
         else:
             self.toast("没有新增课程（可能已经导入过）", "info")
+        # 导入完成后带着动画回到课程表
+        self.go(1, animate=True)
 
     # ------------------------------------------------------------ 单词本
     def _on_wordbook_changed(self):
         # 单词本数据不进 data.json，只需保存它自己那份；refresh=False 避免
-        # 重建课表 / 待办页抢焦点。
+        # 重建课程表 / 待办页抢焦点。
         self.commit(refresh=False)
 
     # ------------------------------------------------------------ 数据
@@ -950,15 +1030,16 @@ class MainWindow(QWidget):
     def closeEvent(self, event):
         if self._save_timer.isActive():
             self._save_timer.stop()
-        # 单词本页面可能还有后台线程 / 音频在跑，先停干净再退出
-        if len(self._page_objs) > 5:
-            page = self._page_objs[5]
-            shutdown = getattr(page, "shutdown", None)
-            if callable(shutdown):
+        # 词典 / 单词本 / 课表导入页面可能还有后台线程在跑，先停干净再退出
+        for index in (4, 5, 6):
+            page = self._page_objs[index] if index < len(self._page_objs) else None
+            stop = getattr(page, "stop", None)
+            if callable(stop):
                 try:
-                    shutdown()
+                    stop()
                 except Exception:  # noqa: BLE001 - 关窗时不要再抛错
                     pass
+        wordbook.close_service()
         try:
             core.save_data(self.data)
         except OSError:

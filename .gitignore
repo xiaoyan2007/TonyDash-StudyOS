@@ -76,3 +76,10 @@ ehthumbs.db
 .idea/
 .vscode/
 *.sublime-*
+
+# ---- 临时目录（PIL/自测脚本的缩放中间产物）----
+/tmp*/
+
+# ---- 用户反馈截图（不参与发布）----
+/bug*.png
+/result samples.png

@@ -7,8 +7,14 @@ OCR 用到的 ``onnxruntime`` / ``rapidocr_onnxruntime`` 装在 ``lab/.venv``
 直接 ``import`` 会 ``ImportError``。而 onnxruntime 必须匹配 CPython 版本，
 装进全局环境会污染主程序，风险远大于收益。
 
-所以主进程只做「挑一张图 → 起子进程 → 收进度 → 拿回 :class:`ImportResult`」，
+所以主进程只做「挑图 → 起子进程 → 收进度 → 拿回 :class:`ImportResult`」，
 真正识别在 :mod:`campus_planner.lab_ocr_runner` 里跑，那个文件可以单独手工调试。
+
+性能要点：**一次进程识别多张图**
+--------------------------------
+RapidOCR 引擎冷启动（import onnxruntime + 构造模型）实测 2.7 秒。逐张起子进程时
+每张都要付这一遍，3 张图就是 8 秒纯开销。因此本模块提供 :func:`recognize_many`，
+把整批图片塞进**同一个**子进程，引擎只初始化一次；:func:`recognize` 只是它的单图包装。
 
 降级
 ----
@@ -22,13 +28,13 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Sequence
 
 from .labkit.common import paths
 
 __all__ = [
     "OCRUnavailable", "venv_python", "runner_script", "available",
-    "status", "recognize", "TIMEOUT_SECONDS",
+    "status", "recognize", "recognize_many", "TIMEOUT_SECONDS",
 ]
 
 
@@ -92,25 +98,43 @@ def _probe() -> tuple[bool, str]:
 
 
 def recognize(image_path: Any, progress: Any = None):
-    """识别一张课表截图，返回 :class:`labkit.ttimport.models.ImportResult`。
+    """识别**一张**课表截图，返回 :class:`labkit.ttimport.models.ImportResult`。
 
     ``progress`` 与 :func:`labkit.ttimport.api.parse_file` 同一约定：
     传回调 ``state -> None``，或直接传 :class:`Progress` 对象都可以。
 
     失败抛 :class:`OCRUnavailable`，由界面层提示用户。
+    多张图请用 :func:`recognize_many`（共享一次引擎冷启动）。
+    """
+    results = recognize_many([image_path], progress=progress)
+    return results[0]
+
+
+def recognize_many(image_paths: Sequence[Any], progress: Any = None,
+                   total_weeks: int = 0) -> list:
+    """**一次子进程**识别多张截图，返回与输入同序的 ``ImportResult`` 列表。
+
+    这是消除「识别图片卡顿」的关键：引擎冷启动只在进程开始时付一次。
+    进度是全程连续的 0→100%，界面上看到的是「第 i/N 张 + 张内百分比」。
     """
     from .labkit.ttimport.progress import as_progress
 
-    target = Path(image_path)
-    if not target.is_file():
-        raise OCRUnavailable(f"图片不存在：{target}")
+    targets = [Path(item) for item in image_paths]
+    if not targets:
+        return []
+    for target in targets:
+        if not target.is_file():
+            raise OCRUnavailable(f"图片不存在：{target}")
     ready, reason = status()
     if not ready:
         raise OCRUnavailable(reason)
 
     progress = as_progress(progress)
 
-    cmd = [str(venv_python()), "-u", str(runner_script()), str(target)]
+    cmd = [str(venv_python()), "-u", str(runner_script())]
+    cmd.extend(str(item) for item in targets)
+    if total_weeks:
+        cmd.append(f"--total={int(total_weeks)}")
     try:
         proc = subprocess.Popen(
             cmd, cwd=str(paths.WORKSPACE_ROOT),
@@ -152,4 +176,8 @@ def recognize(image_path: Any, progress: Any = None):
 
     from .labkit.ttimport import api
 
-    return api.from_payload(payload)
+    items = payload.get("results")
+    if items is None:
+        # 兼容旧脚本的「单张返回」形态
+        items = [payload]
+    return [api.from_payload(item) for item in items]

@@ -6,13 +6,19 @@
   很容易踩编码与引号转义的坑；独立文件没有这个问题；
 * 可以单独手工调试，不用先起主程序::
 
-    lab\\.venv\\Scripts\\python.exe -u campus_planner\\lab_ocr_runner.py 截图.png
+    lab\\\\.venv\\\\Scripts\\\\python.exe -u campus_planner\\\\lab_ocr_runner.py 截图.png
+
+**一次进程识别多张图**
+----------------------
+RapidOCR 的引擎冷启动要 2~3 秒（import onnxruntime + 构造模型）。逐张起子进程时
+这部分开销每张都要付一遍；一次进程处理多张只付一次，是「识别图片卡顿」的主要解法。
+所以本脚本按「路径列表 → 结果列表」工作，绝不一张一个进程。
 
 输出约定
 --------
-* **stderr**：每行 ``PROGRESS {"percent":..,"text":".."}`` 报进度；
-* **stdout**：单个 JSON，形如 ``{"ok": true, ...to_payload 结构...}``，
-  失败时 ``{"ok": false, "error": "..."}``。
+* **stderr**：每行 ``PROGRESS {"percent":..,"text":".."}`` 报进度（0~100 全程连续）；
+* **stdout**：单个 JSON，形如 ``{"ok": true, "results": [payload, ...]}``，
+  每个 payload 是 :func:`api.to_payload` 的结构；失败时 ``{"ok": false, "error": "..."}``。
 
 两边互不干扰，父进程按行解析 stderr、最后解析一次 stdout。
 """
@@ -30,31 +36,59 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
+def _emit_progress(percent: float, text: str) -> None:
+    sys.stderr.write("PROGRESS " + json.dumps({
+        "percent": max(0.0, min(100.0, float(percent))),
+        "text": str(text),
+    }, ensure_ascii=False) + "\n")
+    sys.stderr.flush()
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        sys.stderr.write("用法：lab_ocr_runner.py <图片路径> [学期总周数]\n")
+        sys.stderr.write(
+            "用法：lab_ocr_runner.py <图片1> [图片2 ...] [--total=N]\n")
         return 2
 
-    target = Path(args[0])
-    total = int(args[1]) if len(args) > 1 and str(args[1]).strip() else 0
+    total = 0
+    targets: list[Path] = []
+    for item in args:
+        if item.startswith("--total="):
+            try:
+                total = int(item.split("=", 1)[1] or 0)
+            except ValueError:
+                total = 0
+        else:
+            targets.append(Path(item))
+    if not targets:
+        sys.stderr.write("没有可识别的图片路径\n")
+        return 2
 
-    def _on_progress(state) -> None:
-        """把子解析器的进度原样写回 stderr（父进程会折算回自己的份额）。"""
-        sys.stderr.write("PROGRESS " + json.dumps({
-            "percent": float(getattr(state, "percent", 0.0)),
-            "text": str(getattr(state, "text", "")),
-        }, ensure_ascii=False) + "\n")
-        sys.stderr.flush()
-
+    count = len(targets)
+    results: list[dict] = []
     try:
         from campus_planner.labkit.ttimport import api
 
-        result = api.parse_file(target, total=total, progress=_on_progress)
-        payload = api.to_payload(result, selected_only=False)
-        payload["ok"] = True
-        payload["source"] = result.source
-        sys.stdout.write(json.dumps(payload, ensure_ascii=False))
+        for index, target in enumerate(targets):
+            # 每张图占 1/count 的份额，子解析器再把内部进度折算进这一份
+            base = index / count
+            span = 1.0 / count
+            _emit_progress(base * 100, f"识别中 {index + 1}/{count}：{target.name}")
+
+            def _on_progress(state, base=base, span=span) -> None:
+                inner = float(getattr(state, "percent", 0.0)) / 100.0
+                _emit_progress((base + inner * span) * 100,
+                               str(getattr(state, "text", "")))
+
+            result = api.parse_file(target, total=total, progress=_on_progress)
+            payload = api.to_payload(result, selected_only=False)
+            payload["ok"] = True
+            payload["source"] = result.source
+            results.append(payload)
+            _emit_progress((base + span) * 100, f"完成 {index + 1}/{count}：{target.name}")
+
+        sys.stdout.write(json.dumps({"ok": True, "results": results}, ensure_ascii=False))
         sys.stdout.flush()
         return 0
     except Exception as exc:  # noqa: BLE001 - 子进程任何异常都要变成结构化输出

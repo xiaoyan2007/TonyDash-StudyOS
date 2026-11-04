@@ -15,7 +15,8 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 APP_NAME = "TonyDash学习终端"
-APP_SUBTITLE = "课表 · 考试 · 待办"
+# 标题栏软件名右侧的小字：一句产品理念，而不是功能清单。
+APP_SUBTITLE = "把课表、考试和待办，收进一块玻璃里"
 APP_VERSION = "Beta 1.5"
 APP_SLOGAN = "把课表、考试和待办，收进一块玻璃里"
 APP_AUTHOR = "xiaoyan2007"

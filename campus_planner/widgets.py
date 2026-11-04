@@ -787,7 +787,13 @@ class EmptyState(QWidget):
             d.setAlignment(Qt.AlignmentFlag.AlignCenter)
             d.setWordWrap(True)
             d.setMaximumWidth(440)
-            d.setMinimumHeight(d.fontMetrics().height() * 2 + 4)
+            # 高度按「实际换行后的行数」算，不能写死 2 行：说明文字里带空行、
+            # 换行后常占 3~4 行，写死高度会被父布局压扁、后半句被裁掉看不见。
+            fm = d.fontMetrics()
+            width = 440
+            flags = int(Qt.TextFlag.TextWordWrap)
+            rect = fm.boundingRect(0, 0, width, 10_000, flags, desc)
+            d.setMinimumHeight(rect.height() + 6)
             d.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             lay.addWidget(d, 0, Qt.AlignmentFlag.AlignHCenter)
         if action is not None:

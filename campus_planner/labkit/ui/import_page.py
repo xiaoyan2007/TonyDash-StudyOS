@@ -74,8 +74,9 @@ class _ImportWorker(QObject):
             images = [Path(item) for item in self._targets
                       if Path(item).suffix.lower() in api.IMAGE_SUFFIXES]
             if images:
-                # 截图走子进程 OCR（onnxruntime 只在 lab/.venv），与表格/PDF 混排时一起合并
-                results = [self._recognize(image, on_progress) for image in images]
+                # 所有截图**塞进同一个 OCR 子进程**：RapidOCR 引擎冷启动 2~3 秒，
+                # 逐张起进程会让每张都付一遍。一次进程识别整批，是「识别卡顿」的主解。
+                results = [self._recognize_all(images, on_progress)]
                 rest = [item for item in self._targets if Path(item) not in images]
                 if rest:
                     results.append(api.parse_many(rest, progress=on_progress))
@@ -97,9 +98,10 @@ class _ImportWorker(QObject):
         self.finished.emit()
 
     @staticmethod
-    def _recognize(image: Path, on_progress):
-        """识别单张截图；进度量纲与 :func:`api.parse_file` 一致（0~1）。"""
+    def _recognize_all(images: list[Path], on_progress):
+        """一次子进程识别多张截图，再合并成一份结果（进度 0~1 全程连续）。"""
         from campus_planner import lab_ocr
+        from ..ttimport.merge import merge_results
 
         class _State:
             __slots__ = ("percent", "text", "eta_text")
@@ -111,7 +113,10 @@ class _ImportWorker(QObject):
             state.eta_text = ""
             on_progress(state)
 
-        return lab_ocr.recognize(image, progress=report)
+        results = lab_ocr.recognize_many(images, progress=report)
+        if len(results) == 1:
+            return results[0]
+        return merge_results(results, source="merged")
 
 
 class ImportPage(QWidget):

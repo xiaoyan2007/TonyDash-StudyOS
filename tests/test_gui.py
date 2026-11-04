@@ -92,7 +92,7 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(dlg.result_exam.start_time, "09:00")
 
     def test_settings_edits_do_not_rebuild_self(self):
-        self.win.go(4)
+        self.win.go(7)
         st = self.win.settings_page
         first_row = st._period_rows[0]
         st.total_weeks.setText("16")
@@ -104,12 +104,12 @@ class GuiTest(unittest.TestCase):
         self.assertIs(st._period_rows[0], first_row)
 
     def test_glass_slider_updates_setting(self):
-        self.win.go(4)
+        self.win.go(7)
         self.win.settings_page._on_glass(88)
         self.assertEqual(self.win.data.settings.glass, 88)
 
     def test_glass_backdrop_rebuilds_quickly(self):
-        self.win.go(4)
+        self.win.go(7)
         before = self.win._backdrop.cacheKey()
         self.win.settings_page._on_glass(92)
         # 背景是 16ms 合并重绘；进程繁忙时固定 qWait 时长可能收不到该定时器，
@@ -176,7 +176,7 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(reloaded.courses[0].name, "测试课程 X")
 
     def test_total_weeks_keeps_course_periods(self):
-        self.win.go(4)
+        self.win.go(7)
         st = self.win.settings_page
         course = next(c for c in self.win.data.courses if c.start >= 3)
         before = (course.start, course.end)
@@ -185,7 +185,7 @@ class GuiTest(unittest.TestCase):
         self.assertEqual((course.start, course.end), before)
 
     def test_period_duration_feedback(self):
-        self.win.go(4)
+        self.win.go(7)
         st = self.win.settings_page
         row = st._period_rows[0]
         dur = row.findChildren(QLabel)[-1]
@@ -287,7 +287,7 @@ class GuiTest(unittest.TestCase):
 
     def test_term_start_updates_rail_week(self):
         """改了「开学第一周周一」之后，左栏的当前周次与进度条要立刻跟着变。"""
-        self.win.go(4)
+        self.win.go(7)
         page = self.win.settings_page
         before = self.win.week_bar.value()
         self.win.week = 9

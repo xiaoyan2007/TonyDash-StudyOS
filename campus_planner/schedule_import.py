@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from . import core
 from .labkit.ui import ImportPage
 from .labkit.ui.kit import Kit
+from .pages import common
 from .widgets import GlassDialog
 
 # ``api.parse_many`` 只在真正调用时才懒加载 ``merge``，而它跑在后台线程里；
@@ -26,7 +28,9 @@ from .widgets import GlassDialog
 # 这里在主进程启动时就先导入，让首次打开对话框不必付这笔钱。
 from .labkit.ttimport import merge as _merge  # noqa: F401 - 仅为预导入
 
-__all__ = ["CourseImportDialog", "apply_import", "to_courses"]
+__all__ = [
+    "CourseImportDialog", "ScheduleImportPage", "apply_import", "to_courses",
+]
 
 
 def to_courses(items, total_weeks: int = 0) -> list[core.Course]:
@@ -129,4 +133,65 @@ class CourseImportDialog(GlassDialog):
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         # 页面可能正在跑 OCR / PDF 解析，关掉窗口时把后台线程停掉
         self._page.stop()
+        super().closeEvent(event)
+
+
+class ScheduleImportPage(QWidget):
+    """课表导入页 —— 主程序内的导航页（不再是另开的模态窗口）。
+
+    与 :class:`CourseImportDialog` 共用同一个 :class:`ImportPage`，区别只是它
+    不套对话框外壳：有主程序自己的 ``PageHeader``，并且识别完成后由主窗口决定
+    往哪儿跳（一般是带着动画回到课程表）。
+    """
+
+    applied = Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("background: transparent;")
+        self.data = None
+        self._kit = Kit()
+        self._page: ImportPage | None = None
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(12)
+        root.addWidget(common.PageHeader(
+            "", "课表导入",
+            hint="Excel / CSV / 截图 / 粘贴文本都能识别，勾选后一键导入"))
+        self._page = ImportPage(self._kit, toast=None)
+        self._page.applied.connect(self.applied)
+        root.addWidget(self._page, 1)
+
+    def set_data(self, data, *args) -> None:
+        self.data = data
+
+    def refresh(self) -> None:
+        fn = getattr(self._page, "refresh", None)
+        if callable(fn):
+            try:
+                fn()
+            except Exception:  # noqa: BLE001 - 刷新失败不该影响其他页
+                pass
+
+    def sync_theme(self) -> None:
+        """ImportPage 把主题色写死在构造期，切主题只能重建。"""
+        self.stop()
+        old = self._page
+        self._page = ImportPage(self._kit, toast=None)
+        self._page.applied.connect(self.applied)
+        root = self.layout()
+        index = root.indexOf(old)
+        root.removeWidget(old)
+        old.setParent(None)
+        old.deleteLater()
+        if index < 0:
+            index = root.count()
+        root.insertWidget(index, self._page, 1)
+
+    def stop(self) -> None:
+        if self._page is not None:
+            self._page.stop()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        self.stop()
         super().closeEvent(event)
