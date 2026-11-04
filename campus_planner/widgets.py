@@ -543,7 +543,9 @@ class SearchBox(QLineEdit):
         self._icon.setStyleSheet(f"color: {theme.C_SUB}; background: transparent;")
         self._icon.setFixedSize(18, 18)
         self._icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._clear = AppButton("", "close", "ghost", "icon")
+        # 清空按钮必须以本输入框为 parent：无 parent 的按钮在 setVisible(True)
+        # 时会变成一个独立的顶层小窗口（输入第一个字母弹出的那个「小窗」）。
+        self._clear = AppButton("", "close", "ghost", "icon", self)
         self._clear.setFixedSize(22, 22)
         self._clear.setToolTip("清空搜索")
         self._clear.hide()
@@ -1351,6 +1353,56 @@ class Select(QComboBox):
         super().__init__(parent)
         self.setMinimumHeight(38)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def showPopup(self):
+        # 弹出层是懒创建的独立顶层窗口：它挂在全局 QSS 的
+        # ``QComboBox QAbstractItemView`` 选择器上，但主题切换后
+        # 常拿到创建时的旧配色（夜间下打开是一片纯白）。
+        # 必须在 super().showPopup() **之后**再写样式：在此之前 view() 还
+        # 是个临时的默认视图，提前写样式既落不到真正的弹层上，还会让
+        # Qt 在换用内部 QComboBoxListView 时报 "Could not parse stylesheet"。
+        super().showPopup()
+        if self.count() > 0:
+            self._style_popup()
+            # 弹层刚建好，样式落到视图上需要一轮事件循环才吃满背景
+            QTimer.singleShot(0, self._style_popup)
+
+    def _style_popup(self):
+        bg = theme.popup_solid()
+        text = theme.C_TEXT
+        sub = theme.C_SUB
+        dark = theme.MODE == "dark"
+        hover = "rgba(255,255,255,20)" if dark else "rgba(10,132,255,20)"
+        selected = "rgba(76,155,255,64)" if dark else "rgba(10,132,255,38)"
+        view = self.view()
+        view.setStyleSheet(
+            f"QAbstractItemView{{background:{bg};border:none;color:{text};outline:none;}}"
+            f"QAbstractItemView::item{{min-height:27px;padding:2px 10px;"
+            f"border-radius:6px;color:{text};}}"
+            f"QAbstractItemView::item:hover{{background:{hover};}}"
+            f"QAbstractItemView::item:selected{{background:{selected};color:{text};}}"
+            f"QScrollBar:vertical{{background:transparent;width:8px;margin:2px;}}"
+            f"QScrollBar::handle:vertical{{background:{sub};border-radius:4px;"
+            "min-height:24px;}}"
+            "QScrollBar::add-line,QScrollBar::sub-line{height:0px;}"
+        )
+        container = view.parentWidget()
+        if container is not None:
+            # 容器只改 palette，不写 styleSheet：给弹层容器写
+            # ``QWidget{...}`` 会作为「继承样式」落到 Qt 内部的
+            # QComboBoxListView 上，触发 "Could not parse stylesheet"。
+            pal = container.palette()
+            pal.setColor(QPalette.ColorRole.Window, QColor(bg))
+            pal.setColor(QPalette.ColorRole.Base, QColor(bg))
+            pal.setColor(QPalette.ColorRole.Text, QColor(text))
+            container.setPalette(pal)
+        viewport = view.viewport()
+        viewport.setAutoFillBackground(True)
+        vpal = viewport.palette()
+        vpal.setColor(QPalette.ColorRole.Base, QColor(bg))
+        vpal.setColor(QPalette.ColorRole.Window, QColor(bg))
+        vpal.setColor(QPalette.ColorRole.Text, QColor(text))
+        viewport.setPalette(vpal)
 
     def paintEvent(self, event):
         super().paintEvent(event)
