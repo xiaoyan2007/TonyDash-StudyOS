@@ -191,13 +191,13 @@ class MainWindow(QWidget):
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         self.nav_buttons: list[widgets.NavButton] = []
-        self.nav_targets = [0, 1, 2, 3, 4, 5, 6, 7]
-        # 主页 / 课程表 / 待办 / 期末考试 / 课表导入 / 词典查询 / 单词本 / 设置
+        self.nav_targets = [0, 1, 2, 3, 5, 6, 7]
+        # 主页 / 课程表 / 待办 / 期末考试 / 词典查询 / 单词本 / 设置
+        # 「课表导入」是课程表下的功能页（索引 4），不在左栏单独占一项。
         for i, (icon, label) in enumerate((("home", "主页"),
                                            ("calendar", "课程表"),
                                            ("list", "待办"),
                                            ("report", "期末考试"),
-                                           ("upload", "课表导入"),
                                            ("search", "词典查询"),
                                            ("books", "单词本"),
                                            ("gear", "设置"))):

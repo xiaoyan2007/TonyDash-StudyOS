@@ -50,14 +50,16 @@ class GuiTest(unittest.TestCase):
         self.app.processEvents()
 
     def test_pages_render(self):
-        for index in (0, 1, 2, 3, 4):
+        for index in range(len(self.win._page_objs)):
             self.win.go(index)
             self.app.processEvents()
             pm = self.win.grab()
             self.assertFalse(pm.isNull())
             self.assertGreater(pm.width(), 900)
-        self.assertEqual(self.win.stack.currentIndex(), 4)
-        self.assertTrue(self.win.nav_buttons[4].isChecked())
+        # 「课表导入」(索引 4) 是课程表下的功能页，不在左栏；导航项 7 个
+        self.assertEqual(len(self.win.nav_buttons), 7)
+        self.assertNotIn("课表导入", [b.label for b in self.win.nav_buttons])
+        self.assertEqual(self.win.nav_targets, [0, 1, 2, 3, 5, 6, 7])
 
     def test_week_navigation(self):
         self.win._on_week(3)

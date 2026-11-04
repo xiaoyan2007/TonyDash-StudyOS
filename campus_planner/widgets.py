@@ -763,6 +763,63 @@ class StatTile(GlassCard):
         self._render()
 
 
+class _WrapLabel(QLabel):
+    """按**实际可用宽度**自动撑高的换行文字。
+
+    Qt 的 ``QLabel`` + ``setWordWrap(True)`` 在布局里给不出可靠的换行高度：
+    ``sizeHint`` 按理想宽度算行数，父布局却可能只给一半宽度，于是文字被压扁、
+    后半句被裁掉（查词页「还没有查询结果」的引导文字就踩过这个坑）。
+    这里用 ``heightForWidth`` + 实时 ``setMinimumHeight`` 双保险：
+    resize 时按当前宽度算一次最小高度，布局就再也压不下去。
+    """
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(text, parent)
+        self.setWordWrap(True)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        self.setMinimumHeight(0)
+        self._sync_min_height()
+
+    # -- Qt 接口
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt 命名
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt 命名
+        rect = self.fontMetrics().boundingRect(
+            0, 0, max(1, int(width)), 100_000,
+            int(Qt.TextFlag.TextWordWrap), self.text())
+        return max(self.fontMetrics().height(), rect.height()) + 6
+
+    def sizeHint(self) -> QSize:
+        width = self.maximumWidth()
+        if width <= 0 or width >= 16_777_215:
+            width = max(200, super().sizeHint().width())
+        width = min(width, 440)
+        return QSize(width, self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, self._min_height)
+
+    # -- 自己维护最小高度
+    def _sync_min_height(self) -> int:
+        width = self.width()
+        if width <= 0:
+            width = min(self.maximumWidth(), 440) if self.maximumWidth() > 0 else 440
+        need = self.heightForWidth(width)
+        self._min_height = need
+        if self.minimumHeight() != need:
+            self.setMinimumHeight(need)
+        return need
+
+    def resizeEvent(self, event):  # noqa: N802 - Qt 命名
+        super().resizeEvent(event)
+        self._sync_min_height()
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt 命名
+        super().setText(text)
+        self._sync_min_height()
+
+
 class EmptyState(QWidget):
     def __init__(self, icon: str, title: str, desc: str, action: QWidget | None = None,
                  parent=None):
@@ -781,19 +838,12 @@ class EmptyState(QWidget):
         lay.addWidget(t)
         if desc:
             lay.addSpacing(8)
-            d = QLabel(desc, self)
+            d = _WrapLabel(desc, self)
             d.setFont(theme.font(12.5))
             d.setStyleSheet(f"color: {theme.C_SUB}; background: transparent;")
             d.setAlignment(Qt.AlignmentFlag.AlignCenter)
             d.setWordWrap(True)
             d.setMaximumWidth(440)
-            # 高度按「实际换行后的行数」算，不能写死 2 行：说明文字里带空行、
-            # 换行后常占 3~4 行，写死高度会被父布局压扁、后半句被裁掉看不见。
-            fm = d.fontMetrics()
-            width = 440
-            flags = int(Qt.TextFlag.TextWordWrap)
-            rect = fm.boundingRect(0, 0, width, 10_000, flags, desc)
-            d.setMinimumHeight(rect.height() + 6)
             d.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             lay.addWidget(d, 0, Qt.AlignmentFlag.AlignHCenter)
         if action is not None:

@@ -35,6 +35,16 @@ from pathlib import Path
 #: 这里显式把工作区根（``__file__`` 的上两级）补进搜索路径。
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+#: **强制 UTF-8 输出**。Windows 上 ``sys.stdout`` 默认是 GBK（代码页 936），
+#: 不干预的话中文 JSON 会以 GBK 写出，父进程按 UTF-8 读回来全是 ``\\ufffd``
+#: —— 这就是「课表导入结果出现乱码」的根因。父进程 ``Popen`` 用
+#: ``encoding="utf-8"`` 读，两边必须一致。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 - 个别环境不支持 reconfigure
+        pass
+
 
 def _emit_progress(percent: float, text: str) -> None:
     sys.stderr.write("PROGRESS " + json.dumps({

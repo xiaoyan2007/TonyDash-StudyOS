@@ -26,6 +26,7 @@ RapidOCR 引擎冷启动（import onnxruntime + 构造模型）实测 2.7 秒。
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -135,9 +136,17 @@ def recognize_many(image_paths: Sequence[Any], progress: Any = None,
     cmd.extend(str(item) for item in targets)
     if total_weeks:
         cmd.append(f"--total={int(total_weeks)}")
+
+    # 子进程必须用 UTF-8 说话：Windows 默认 stdout 是 GBK，中文 JSON 会被
+    # 按 GBK 写出去，父进程按 UTF-8 读回来就是一堆 \ufffd（用户看到的"乱码"）。
+    # 双保险：环境变量 + 执行器里的 reconfigure（见 lab_ocr_runner.py）。
+    child_env = dict(os.environ)
+    child_env["PYTHONIOENCODING"] = "utf-8"
+    child_env["PYTHONUTF8"] = "1"
+
     try:
         proc = subprocess.Popen(
-            cmd, cwd=str(paths.WORKSPACE_ROOT),
+            cmd, cwd=str(paths.WORKSPACE_ROOT), env=child_env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace",
         )
