@@ -19,7 +19,7 @@ class Release:
 RELEASES: list[Release] = [
     Release(
         version="Beta 1.5",
-        date="2026-11-04",
+        date="2026-11-05",
         headline="课表识别导入 · 词典与单词本",
         slogan="拍张课表就能排好，查过的词都收进自己的小本子。",
         sections=[

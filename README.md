@@ -1,9 +1,9 @@
 # TonyDash学习终端
 
 面向本科生的桌面版学习面板：一块会打招呼的时间屏幕、一张可自由编辑的课表、一套真正能用的期末考试信息系统，再加一份每天都能勾掉的待办清单。
-浅色毛玻璃（亚克力）界面，iOS 蓝强调色，纯本地存储，不联网、不依赖浏览器。
+浅色毛玻璃（亚克力）界面，iOS 蓝强调色，数据纯本地存储、不依赖浏览器。课表识别全部离线完成；只有词典查询与翻译会联网（有道接口，收藏过的词之后可离线看听）。
 
-当前版本：**Beta 1.4**（2026-11-04）
+当前版本：**Beta 1.5**（2026-11-05）
 
 ![时间屏幕主页](assets/screens/home.png)
 
@@ -12,7 +12,7 @@
 ## 功能
 
 ### 启动动画
-- 每次启动展示一段深色科技感动画：渐变背景、流动光团、细网格与向上飘的学习标签。
+- 每次启动展示一段深色科技感动画：渐变背景、流动光团与细网格，整屏内容以「从屏幕里浮现」的方式入场（放大 + 上浮约 1.1 秒）。
 - 依次浮现软件 LOGO、名称、版本号与开发者头像，配一句激励学习的文案，底部进度条收束后进入主界面。
 - 动画全程由 Qt 绘制，不依赖任何网络素材，离线可用。
 
@@ -28,6 +28,21 @@
 - 周次换算：选择学期开学周、总周数后，自动显示每周对应日期、今天高亮。
 - 冲突检测：同一时段重叠的课程会在课程块上标红点，并可一键查看冲突明细。
 - 搜索课程 / 老师 / 地点时，不匹配的课程自动淡出；可隐藏周末列。
+
+### 课表导入（Beta 1.5 新增）
+- 课程表页点「导入课表」在原窗口内动画跳转（不另开弹窗），左栏不占导航项。
+- 四种来源：Excel / CSV 表格、教务系统导出 PDF、课表截图 OCR、教务系统网页复制的粘贴文本。
+- 识别结果先进预览表格：逐条勾选，课名 / 周次 / 老师 / 地点可双击直接改，确认无误再「导入到课表」。
+- 周次完整保留（`1-8, 10-16` 这类不连续段原样进课表，不拆课）；作息按「第几节起止」去重合并，不覆盖已有作息。
+- 多张截图一次进程批量识别、PDF 走文字层解析，识别全程后台线程 + 百分比进度条，界面不卡死。
+- 截图 OCR 需要 onnxruntime 引擎；缺引擎时「识别截图」按钮给出提示，其余三种来源照常可用。
+
+### 词典查询与单词本（Beta 1.5 新增）
+- 侧栏两个独立入口：「词典查询」与「单词本」，页面不加大标题，整块右侧区域留给功能。
+- 词典查询页带「查单词 / 翻译」两个选项卡：查词展示音标（英 / 美）、释义、词形变化、短语、同近义词、例句与考试标签；翻译走有道翻译，译文可一键复制。
+- 语言下拉框 11 种：自动检测 / 中 / 英 / 法 / 日 / 韩 / 西 / 德 / 意 / 葡 / 俄；不同语言的查询结果分开缓存。
+- 收藏一个词会把音标、释义、例句连发音 mp3 一起存到本地，之后断网也能看、能听；查词、收藏、翻译都在后台线程并带百分比进度条。
+- 单词本支持搜索、三种排序（最近收藏 / 字母 / 优先级）、备注、逐条删除、导出 / 导入 JSON、一键清空；数据独立存放（`campus_planner/_data/`），不进 `data.json`，升级清空课表也不会丢生词。
 
 ### 待办清单
 - 三种待办：每日、每周、一次性；每日跨天自动重置，每周周一重置，已完成的一次性待办次日自动归档。
@@ -54,7 +69,7 @@
 - 毛玻璃强度滑杆（20–100），拖动时背景连续变化；可关闭动画。
 - 鸣谢名单：按学校拼音排序，展示参与测试与反馈的同学，校徽可自行替换为官方 Logo。
 - 数据自动保存到 `%APPDATA%\CampusPlanner\data.json`，支持 JSON 备份 / 恢复、清空全部。
-- 界面图形（图标、背景、玻璃卡片）由 Qt 绘制；关于页的头像与 GitHub Logo 为内置本地资源，不联网。
+- 界面图形（图标、背景、玻璃卡片）由 Qt 绘制；关于页的头像与 GitHub Logo 为内置本地资源。课表识别离线进行；词典查询 / 翻译在联网时可用。
 
 ### 关于与更新日志
 - 关于界面参考「拾光 ShiGuang」的信息结构：应用图标、名称、slogan、版本、发布日期、开发者。
@@ -64,18 +79,18 @@
 ## 运行
 
 ### 安装包（推荐）
-双击 `release\TonyDash学习终端-Beta1.2-Setup.exe`，按向导安装。
+双击 `release\TonyDash学习终端-Beta1.5-Setup.exe`，按向导安装。
 
 - 安装包内置 Python、Qt 与 VC++ 运行库，目标电脑**不需要安装 Python 或任何开发环境**。
 - 安装向导包含中文用户协议；可自行选择安装目录。
 - 默认创建桌面快捷方式，并默认勾选「开机自动启动」；两项都可以在组件页取消。
 - 卸载时删除程序与快捷方式，保留 `%APPDATA%\CampusPlanner` 中的课程/考试/待办数据，避免误删。
-- 静默安装：`TonyDash学习终端-Beta1.2-Setup.exe /S /D=D:\你的路径`（`/D` 必须是最后一个参数）。
+- 静默安装：`TonyDash学习终端-Beta1.5-Setup.exe /S /D=D:\你的路径`（`/D` 必须是最后一个参数）。
 
 ### 直接运行打包版
-双击 `release\TonyDash学习终端-Beta1.2\TonyDash学习终端-Beta1.2.exe`。
+双击 `release\TonyDash学习终端-Beta1.5\TonyDash学习终端-Beta1.5.exe`。
 
-> 请保留整个 `release\TonyDash学习终端-Beta1.2` 文件夹（exe 旁边的 `_internal` 是运行时依赖），可以整体复制到任意位置，但不要只拷走 exe。
+> 请保留整个 `release\TonyDash学习终端-Beta1.5` 文件夹（exe 旁边的 `_internal` 是运行时依赖），可以整体复制到任意位置，但不要只拷走 exe。
 > 首次启动是空白状态，不预置任何课程、考试或待办；从主页或课程表开始添加即可。
 
 ### 旧版 Beta 1.0
@@ -112,13 +127,15 @@ py main.py
 
 ```
 release/
-  TonyDash学习终端-Beta1.2-Setup.exe  Beta 1.2 安装包
-  TonyDash学习终端-Beta1.2/    Beta 1.2（exe + _internal）
-  TonyDash学习终端-Beta1.1/    上一版（exe + _internal）
-  TonyDash学习终端-Beta1.0/    原始 Beta 1.0 最终版
+  TonyDash学习终端-Beta1.5-Setup.exe  Beta 1.5 安装包
+  TonyDash学习终端-Beta1.5/    Beta 1.5（exe + _internal）
+  TonyDash学习终端-Beta1.5.zip 便携包
+  TonyDash学习终端-Beta1.4-Setup.exe / Beta1.4/ / Beta1.4.zip   上一版交付
+  TonyDash学习终端-Beta1.3-Setup.exe / Beta1.3/ / Beta1.3.zip   更早交付
+  TonyDash学习终端-Beta1.2-Setup.exe / Beta1.2/ / Beta1.1/ / Beta1.0/   历史版本
 ```
 
-> 当前源码已到 **Beta 1.4**；按本版本安排，Beta 1.4 的 exe 与安装包尚未打包，打包命令见下文。
+> 请保留整个版本文件夹，不要只拷 exe；`_internal` 是运行时依赖。
 
 ## 备份机制
 
@@ -142,30 +159,41 @@ main.py                     程序入口（含 --selftest 离屏自检）
 backup.py                   改动前快照脚本
 campus_planner/
   core.py                   数据模型、待办跨天重置、周次、冲突、存储、ICS 导出
-  changelog.py              Beta 1.0–1.4 更新日志数据与 HTML / 纯文本生成
+  changelog.py              Beta 1.0–1.5 更新日志数据与 HTML / 纯文本生成
   theme.py                  配色、字体、图标、背景与玻璃绘制、全局 QSS、主题令牌
   widgets.py                玻璃卡片、按钮、开关、分段控件、时间选择器、弹窗等通用组件
   dialogs.py                课程编辑 / 考试编辑弹窗
   about_dialogs.py          关于、完整更新日志、待办完成历史弹窗
   credits.py                鸣谢名单（学校徽标与同学列表）
   splash.py                 启动动画（LOGO、头像、版本号与激励文案）
-  main.py                   无边框主窗口、五页导航、数据流与快捷键
+  lab_ocr.py                截图 OCR 子进程服务（onnxruntime 隔离在 lab/.venv）
+  lab_ocr_runner.py         OCR 子进程执行器（可单独手工调试）
+  schedule_import.py        课表导入页与对话框封装、导入结果写入 AppData
+  main.py                   无边框主窗口、侧栏导航、数据流与快捷键
+  labkit/                   由 lab 实验室整合进主程序的功能包
+    common/                 路径、原子写 JSON 存储、主程序主题桥接
+    ttimport/               课表导入：表格 / 文本 / PDF / 截图 OCR、周次与合并
+    wordbook/               有道查词、翻译（translate.py）、单词本存储与发音缓存
+    ui/                     导入页、查词页（查词 / 翻译选项卡）、单词本页
   pages/
     common.py               页头等公共部件
     home.py                 时间屏幕主页（时钟、问候、摘要与本周概览）
-    schedule.py             课程表页（自绘网格 + 固定表头）
+    schedule.py             课程表页（自绘网格 + 固定表头 + 导入入口）
     todo.py                 待办页（任务卡、快速添加、筛选、完成历史）
     exams.py                期末考试页（倒计时 / 统计 / 卡片列表）
     settings.py             设置页
+    wordbook.py             词典查询 / 单词本两个独立导航页
 tests/
-  test_core.py              31 项核心逻辑单测
+  test_core.py              39 项核心逻辑单测
   test_tasks.py             6 项待办 / 更新日志单测
-  test_gui.py               30 项离屏 GUI 冒烟测试
+  test_gui.py               33 项离屏 GUI 冒烟测试
+  test_isolation.py         2 项数据沙箱守卫（测试不得写真实用户目录）
   preview_app.py            渲染页面截图
   preview_style.py          组件样式样张
 update log/                 逐版本更新日志 txt
 assets/                     应用图标、GitHub 头像 / Logo 与界面截图
-backup/                     改动前快照
+samples → campus_planner/samples  课表导入样例（表格 / 文本 / 截图）
+backup/                     改动前快照（不参与上传）
 ```
 
 ## 开发与测试
@@ -173,7 +201,7 @@ backup/                     改动前快照
 ```bat
 py -m unittest discover -s tests -v
 ```
-当前共 **67 项测试**（31 核心 + 6 待办 / 日志 + 30 GUI），全部离屏运行，无需真实显示器。另有 `tests/_verify_b14.py` 逐条核对 Beta 1.4 的 9 项需求。
+当前共 **80 项测试**（39 核心 + 6 待办 / 日志 + 33 GUI + 2 数据沙箱守卫），全部离屏运行，无需真实显示器。另有 `tests/_verify_b14.py` 逐条核对 Beta 1.4 的 9 项需求。
 
 ```bat
 py tests/preview_app.py     :: 输出 tests/_shots/page_*.png
@@ -194,7 +222,7 @@ py -m PyInstaller --noconfirm --clean --onedir --windowed ^
 cd installer
 makensis TonyDash.nsi
 ```
-输出为 `release\TonyDash学习终端-Beta1.2-Setup.exe`。
+输出为 `release\TonyDash学习终端-Beta1.5-Setup.exe`。
 
 ## 设计说明
 

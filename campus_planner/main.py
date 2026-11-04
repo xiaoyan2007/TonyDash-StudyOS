@@ -397,14 +397,17 @@ class MainWindow(QWidget):
         self._coach = None
 
     def _bind_shortcuts(self):
+        # 页面索引：0 主页 / 1 课程表 / 2 待办 / 3 期末考试 / 4 课表导入 /
+        # 5 词典查询 / 6 单词本 / 7 设置。Ctrl+5 与 Ctrl+, 要保持「跳设置」
+        # 的老行为，指到索引 7，不是导航改版前的索引 4。
         bindings = (
             ("Ctrl+1", lambda: self.go(0)),
             ("Ctrl+2", lambda: self.go(1)),
             ("Ctrl+3", lambda: self.go(2)),
             ("Ctrl+4", lambda: self.go(3)),
-            ("Ctrl+5", lambda: self.go(4)),
+            ("Ctrl+5", lambda: self.go(7)),
             ("Ctrl+N", self._new_current),
-            ("Ctrl+,", lambda: self.go(4)),
+            ("Ctrl+,", lambda: self.go(7)),
             ("Left", lambda: self._key_week(-1)),
             ("Right", lambda: self._key_week(1)),
         )
@@ -615,6 +618,16 @@ class MainWindow(QWidget):
         for index in built:
             w = old.get(index)
             if w is not None:
+                # 页面可能还有后台线程在跑（课表导入 OCR / 查词 / 发音）。
+                # 不先 stop 就 deleteLater，QThread 会在运行中被销毁：
+                # Qt 报 "Destroyed while thread is still running"，严重时会崩。
+                # （lab 原程序切主题就是这个顺序：先全部 stop 再重建。）
+                stop = getattr(w, "stop", None)
+                if callable(stop):
+                    try:
+                        stop()
+                    except Exception:  # noqa: BLE001 - 停线程失败不该阻断切主题
+                        pass
                 w.hide()
                 self.stack.removeWidget(w)
                 w.setParent(None)
@@ -986,19 +999,24 @@ class MainWindow(QWidget):
             self.setWindowState(Qt.WindowState.WindowMaximized)
 
     def _new_current(self):
+        # Ctrl+N 只在有「新建」语义的页面生效：待办页聚焦输入框、考试页新建考试、
+        # 课程表页新建课程。导航改版后新增的词典 / 单词本 / 课表导入 / 设置页
+        # 没有新建课程的概念，不该弹新建课程对话框。
         index = self.stack.currentIndex()
         if index == 3:
             self.new_exam()
         elif index == 2:
             self.todo_page.input.setFocus()
-        else:
+        elif index == 1:
             self.new_course()
 
     def _key_week(self, delta: int):
         focus = QApplication.focusWidget()
         if isinstance(focus, (QLineEdit, QComboBox, QAbstractSpinBox, QDateEdit, QTimeEdit)):
             return
-        if self.stack.currentIndex() != 0:
+        # 页头提示「← → 换周」写在课程表页上，主页也保留这个习惯；
+        # 其余页面（词典 / 单词本 / 导入 / 设置等）不响应。
+        if self.stack.currentIndex() not in (0, 1):
             return
         self._on_week(core.clamp(self.week + delta, 1, self.data.settings.total_weeks))
 

@@ -1,4 +1,4 @@
-﻿; TonyDash学习终端 Beta 1.4 installer (NSIS 3 / Unicode)
+﻿; TonyDash学习终端 Beta 1.5 installer (NSIS 3 / Unicode)
 Unicode true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
@@ -6,16 +6,16 @@ Unicode true
 !include "Sections.nsh"
 
 !define APP_NAME "TonyDash学习终端"
-!define APP_VERSION "Beta 1.4"
-!define APP_EXE "TonyDash学习终端-Beta1.4.exe"
-!define APP_SRC "..\release\TonyDash学习终端-Beta1.4"
+!define APP_VERSION "Beta 1.5"
+!define APP_EXE "TonyDash学习终端-Beta1.5.exe"
+!define APP_SRC "..\release\TonyDash学习终端-Beta1.5"
 !define APP_ICON "..\assets\app.ico"
 !define APP_README "..\README.md"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\TonyDash学习终端"
 !define OLD_KEY "Software\TonyDash学习终端"
 
 Name "${APP_NAME} ${APP_VERSION}"
-OutFile "..\release\TonyDash学习终端-Beta1.4-Setup.exe"
+OutFile "..\release\TonyDash学习终端-Beta1.5-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\TonyDash学习终端"
 InstallDirRegKey HKCU "${OLD_KEY}" "InstallDir"
 RequestExecutionLevel user
@@ -24,12 +24,12 @@ SetCompressorDictSize 64
 ShowInstDetails show
 ShowUninstDetails show
 BrandingText "${APP_NAME} · ${APP_VERSION}"
-VIProductVersion "1.4.0.0"
+VIProductVersion "1.5.0.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
-VIAddVersionKey "ProductVersion" "1.4.0.0"
+VIAddVersionKey "ProductVersion" "1.5.0.0"
 VIAddVersionKey "CompanyName" "xiaoyan2007"
 VIAddVersionKey "FileDescription" "${APP_NAME} 安装程序"
-VIAddVersionKey "FileVersion" "1.4.0.0"
+VIAddVersionKey "FileVersion" "1.5.0.0"
 VIAddVersionKey "LegalCopyright" "© 2026 xiaoyan2007"
 
 !define MUI_ABORTWARNING
@@ -109,6 +109,7 @@ Section "TonyDash学习终端（必需）" SecMain
   Delete "$INSTDIR\TonyDash学习终端-Beta1.1.exe"
   Delete "$INSTDIR\TonyDash学习终端-Beta1.2.exe"
   Delete "$INSTDIR\TonyDash学习终端-Beta1.3.exe"
+  Delete "$INSTDIR\TonyDash学习终端-Beta1.4.exe"
   File /r /x debug.log "${APP_SRC}\*.*"
   File /oname=用户协议.txt "EULA.txt"
   File /oname=README.md "${APP_README}"

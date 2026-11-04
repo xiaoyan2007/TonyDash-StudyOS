@@ -66,6 +66,86 @@ class GuiTest(unittest.TestCase):
         self.assertEqual(self.win.week, 3)
         self.assertEqual(self.win.schedule_page.timetable.week, 3)
 
+    def test_settings_shortcuts_after_nav_growth(self):
+        """Beta 1.5 导航扩到 8 页后，Ctrl+5 与 Ctrl+, 仍应跳「设置」（索引 7）。
+
+        回归场景：导航改版前设置是索引 4；改版后索引 4 变成了「课表导入」，
+        快捷键若忘了跟着改，按 Ctrl+5 会跳错页。
+        """
+        from campus_planner.pages import settings as settings_page
+
+        by_seq = {}
+        for sc in self.win._shortcuts:
+            key = sc.key().toString().lower().replace(" ", "")
+            by_seq[key] = sc
+        for seq in ("ctrl+5", "ctrl+,"):
+            self.assertIn(seq, by_seq, f"缺少快捷键 {seq}")
+            by_seq[seq].activated.emit()
+            self.app.processEvents()
+            self.assertEqual(self.win.stack.currentIndex(), 7, f"{seq} 没跳设置页")
+            self.assertIsInstance(self.win._page_objs[7], settings_page.SettingsPage)
+        self.assertEqual(self.win.nav_buttons[6].label, "设置")
+        self.assertTrue(self.win.nav_buttons[6].isChecked())
+
+    def test_arrow_keys_change_week_on_schedule_page(self):
+        """课表页页头写着「← → 换周」，方向键就必须真的能在课表页换周。
+
+        回归场景：导航扩页后 _key_week 只在主页生效，课表页按键没反应。
+        """
+        from PySide6.QtCore import Qt as CQt
+
+        self.win.go(1)
+        self.app.processEvents()
+        before = self.win.week
+        self.win._key_week(1)
+        self.assertEqual(self.win.week, before + 1)
+        # 课程表页按真实按键也能换周
+        QTest.keyClick(self.win, CQt.Key.Key_Left)
+        self.app.processEvents()
+        self.assertEqual(self.win.week, before)
+        # 词典查询页不应响应换周
+        self.win.go(5)
+        self.app.processEvents()
+        kept = self.win.week
+        self.win._key_week(1)
+        self.assertEqual(self.win.week, kept)
+
+    def test_ctrl_n_only_opens_dialogs_on_course_pages(self):
+        """Ctrl+N 只在课表 / 待办 / 考试页触发了对应新建，其他页面不打扰。"""
+        calls = []
+        self.win.new_course = lambda *a: calls.append("course")
+        self.win.new_exam = lambda: calls.append("exam")
+
+        self.win.go(2)  # 待办页：走聚焦输入框分支，不会调 new_course
+        self.app.processEvents()
+        self.win._new_current()
+        self.assertNotIn("course", calls)
+
+        self.win.go(3)
+        self.app.processEvents()
+        self.win._new_current()
+        self.assertEqual(calls, ["exam"])
+
+        calls.clear()
+        self.win.go(5)  # 词典查询页
+        self.app.processEvents()
+        self.win._new_current()
+        self.win.go(6)  # 单词本页
+        self.app.processEvents()
+        self.win._new_current()
+        self.win.go(7)  # 设置页
+        self.app.processEvents()
+        self.win._new_current()
+        self.win.go(4)  # 课表导入页
+        self.app.processEvents()
+        self.win._new_current()
+        self.assertEqual(calls, [], "词典 / 单词本 / 设置 / 导入页不该弹新建课程")
+
+        self.win.go(1)  # 课程表页仍然能新建
+        self.app.processEvents()
+        self.win._new_current()
+        self.assertEqual(calls, ["course"])
+
     def test_course_dialog_save(self):
         dlg = dialogs.CourseDialog(self.win, self.win.data, None, 2, 3)
         dlg.name.setText("离散数学")

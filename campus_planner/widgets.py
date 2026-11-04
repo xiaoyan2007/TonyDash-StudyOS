@@ -1364,8 +1364,16 @@ class Select(QComboBox):
         super().showPopup()
         if self.count() > 0:
             self._style_popup()
-            # 弹层刚建好，样式落到视图上需要一轮事件循环才吃满背景
-            QTimer.singleShot(0, self._style_popup)
+            # 弹层刚建好，样式落到视图上需要一轮事件循环才吃满背景。
+            # 用带防护的回调：事件循环排到下一轮时下拉框可能已随页面重建销毁。
+            QTimer.singleShot(0, self._style_popup_safe)
+
+    def _style_popup_safe(self):
+        try:
+            if self.isVisible() or self.view().isVisible():
+                self._style_popup()
+        except RuntimeError:  # noqa: PER204 - 底层 C++ 对象已被 deleteLater
+            pass
 
     def _style_popup(self):
         bg = theme.popup_solid()
