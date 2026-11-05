@@ -10,7 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['onnxruntime', 'rapidocr_onnxruntime', 'cv2', 'torch', 'torchvision', 'llvmlite', 'numba', 'scipy', 'matplotlib', 'IPython'],
     noarchive=False,
     optimize=0,
 )

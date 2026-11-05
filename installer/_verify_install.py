@@ -41,7 +41,7 @@ def main():
     print("\n=== 无旧版本时再装新版（应无升级提示、静默完成）===")
     r = subprocess.run(
         ["cmd", "/c",
-         f"{ROOT / 'release' / 'TonyDash学习终端-Beta1.4-Setup.exe'} /S "
+         f"{ROOT / 'release' / 'TonyDash学习终端-Beta1.5-Setup.exe'} /S "
          f"/D=D:\\Deskface\\软件开发\\installtest"],
         capture_output=True, text=True, check=False)
     time.sleep(4)

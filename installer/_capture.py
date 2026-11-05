@@ -27,7 +27,7 @@ def run_old():
 
 
 def run_new():
-    exe = ROOT / "installtest" / "TonyDash学习终端-Beta1.4.exe"
+    exe = ROOT / "installtest" / "TonyDash学习终端-Beta1.5.exe"
     env = dict(os.environ)
     env["APPDATA"] = str(ROOT / "installtest" / "_appdata_new")
     subprocess.Popen([str(exe)], env=env, cwd=str(ROOT / "installtest"))
@@ -53,7 +53,7 @@ def main():
         print("DONE new")
     elif mode == "dialog":
         # 交互式运行新版安装包，截取旧版本检测确认框
-        exe = ROOT / "release" / "TonyDash学习终端-Beta1.4-Setup.exe"
+        exe = ROOT / "release" / "TonyDash学习终端-Beta1.5-Setup.exe"
         subprocess.Popen([str(exe), "/D=D:\\Deskface\\软件开发\\installtest"],
                          cwd=str(ROOT / "installer"))
         time.sleep(6.0)
