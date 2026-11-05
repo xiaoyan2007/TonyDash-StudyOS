@@ -7,7 +7,23 @@
 
 ![时间屏幕主页](assets/screens/home.png)
 
+*主页：标题右侧是产品理念小字，侧栏含词典查询 / 单词本入口*
+
 ![课程表](assets/screens/schedule.png)
+
+*课程表：顶栏「导入课表」一键进入识别导入*
+
+![词典查询](assets/screens/lookup.png)
+
+*词典查询：查单词 / 翻译双选项卡，百分比进度条*
+
+![单词本](assets/screens/wordbook.png)
+
+*单词本：搜索、排序、备注、导出 / 导入，发音离线可听*
+
+![课表导入](assets/screens/import.png)
+
+*课表导入：Excel / CSV / PDF / 截图 / 粘贴文本，勾选后一键入库*
 
 ## 功能
 
@@ -83,8 +99,10 @@
 
 - 安装包内置 Python、Qt 与 VC++ 运行库，目标电脑**不需要安装 Python 或任何开发环境**。
 - 安装向导包含中文用户协议；可自行选择安装目录。
+- 覆盖安装：检测到旧版本时会询问是否覆盖，点「是」继续向导（数据保留）、点「否」退出安装。
+- 目录保护：所选安装目录不为空（也不是旧版本安装位置）时，默认安装到其下的 `TonyDash_StudyOS` 子文件夹，避免把程序文件散落进现有目录。
 - 默认创建桌面快捷方式，并默认勾选「开机自动启动」；两项都可以在组件页取消。
-- 卸载时删除程序与快捷方式，保留 `%APPDATA%\CampusPlanner` 中的课程/考试/待办数据，避免误删。
+- 卸载时删除程序与快捷方式，保留 `%APPDATA%\CampusPlanner` 中的课程/考试/待办与单词本数据，避免误删。
 - 静默安装：`TonyDash学习终端-Beta1.5-Setup.exe /S /D=D:\你的路径`（`/D` 必须是最后一个参数）。
 
 ### 直接运行打包版
@@ -189,6 +207,7 @@ tests/
   test_gui.py               33 项离屏 GUI 冒烟测试
   test_isolation.py         2 项数据沙箱守卫（测试不得写真实用户目录）
   preview_app.py            渲染页面截图
+  make_screens.py           生成 assets/screens 的 README 截图
   preview_style.py          组件样式样张
 update log/                 逐版本更新日志 txt
 assets/                     应用图标、GitHub 头像 / Logo 与界面截图
@@ -205,6 +224,7 @@ py -m unittest discover -s tests -v
 
 ```bat
 py tests/preview_app.py     :: 输出 tests/_shots/page_*.png
+py tests/make_screens.py    :: 重新生成 assets/screens 下的 README 截图
 py main.py --selftest       :: 离屏渲染一帧，输出 selftest.png
 ```
 
