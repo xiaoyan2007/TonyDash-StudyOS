@@ -14,6 +14,8 @@ Unicode true
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\TonyDash学习终端"
 !define OLD_KEY "Software\TonyDash学习终端"
 
+Var DirSuggested ; 目录页的 TonyDash_StudyOS 默认建议只给一次
+
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "..\release\TonyDash学习终端-Beta1.5-Setup.exe"
 InstallDir "$LOCALAPPDATA\Programs\TonyDash学习终端"
@@ -49,6 +51,7 @@ VIAddVersionKey "LegalCopyright" "© 2026 xiaoyan2007"
 Page custom fn_UpgradePage fn_UpgradeLeave
 !insertmacro MUI_PAGE_LICENSE "EULA.rtf"
 !insertmacro MUI_PAGE_COMPONENTS
+!define MUI_PAGE_CUSTOMFUNCTION_PRE fn_DirPre
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -87,16 +90,65 @@ FunctionEnd
 
 Function fn_UpgradePage
   ; 找不到旧版本时本页为空，等于把升级提示藏起来
-  StrCmp $R9 "" done
-  MessageBox MB_YESNO "检测到本机已安装旧版本 ${APP_NAME} $R9。是否覆盖安装？覆盖会替换旧版本程序；你的课表、考试与待办数据保存在 %APPDATA%\CampusPlanner，不会被删除。" /SD idYES
-  Pop $0
-  StrCmp $0 "Yes" done quit
-  quit:
+  StrCmp $R9 "" skip_page
+  ; 注意：必须用 MessageBox 的跳转标签分流，不能 Pop 出返回值再比较字符串——
+  ; MB_YESNO 压栈的是 IDYES=6 / IDNO=7（数字），拿它和 "Yes" 比较永远不相等，
+  ; 结果点「是」「否」都会走到 Quit 立即结束安装（Beta 1.5 安装包的实际 bug）。
+  MessageBox MB_YESNO "检测到本机已安装旧版本 ${APP_NAME} $R9。是否覆盖安装？覆盖会替换旧版本程序；你的课表、考试与待办、单词本数据保存在 %APPDATA%\CampusPlanner，不会被删除。" /SD IDYES IDYES overwrite_yes
+  MessageBox MB_OK "已取消安装。"
+  ; 用户点「否」：按协议约定取消安装
   Quit
-  done:
+  overwrite_yes:
+  skip_page:
+  ; 本页只承载弹窗、没有任何界面控件，必须 Abort 跳过，否则会显示一页空白
+  Abort
 FunctionEnd
 
 Function fn_UpgradeLeave
+FunctionEnd
+
+Function fn_DirPre
+  ; 目录页显示前：若默认目录非空、也不是旧版本安装目录，
+  ; 则把默认安装位置建议为 <所选目录>\TonyDash_StudyOS，避免把文件散落进非空目录。
+  ; 只建议一次（Back→Next 不重复调整）；用户在目录页手动改过的路径以用户为准。
+  StrCmp $INSTDIR "" dpre_done
+  StrCmp $DirSuggested "1" dpre_done
+  StrCpy $DirSuggested "1"
+  ; 含我们卸载器的目录 = 旧版本安装位置，保持原目录执行覆盖安装
+  IfFileExists "$INSTDIR\Uninstall.exe" dpre_done
+  Push $R0
+  Push $R1
+  Push $R2
+  ; 统一去掉结尾反斜杠（用户手输 D:\ 之类，避免拼出双斜杠）
+  StrCpy $R2 "$INSTDIR" 1 -1
+  StrCmp $R2 "\" 0 dpre_notslash
+  StrCpy $INSTDIR "$INSTDIR" -1
+dpre_notslash:
+  ; 目录不存在或为空 → 直接用，不追加
+  FindFirst $R0 $R1 "$INSTDIR\*.*"
+  StrCpy $R2 "empty"
+dpre_loop:
+    StrCmp $R1 "" dpre_loop_end
+    StrCmp $R1 "." dpre_next
+    StrCmp $R1 ".." dpre_next
+    StrCpy $R2 "notEmpty"
+    Goto dpre_loop_end
+dpre_next:
+    FindNext $R0 $R1
+    Goto dpre_loop
+dpre_loop_end:
+  FindClose $R0
+  StrCmp $R2 "notEmpty" dpre_append dpre_pop
+dpre_append:
+  ; 路径已经以 TonyDash_StudyOS 结尾 → 不再追加（防 TonyDash_StudyOS\TonyDash_StudyOS）
+  StrCpy $R1 "$INSTDIR" "" -16
+  StrCmp $R1 "TonyDash_StudyOS" dpre_pop
+  StrCpy $INSTDIR "$INSTDIR\TonyDash_StudyOS"
+dpre_pop:
+  Pop $R2
+  Pop $R1
+  Pop $R0
+dpre_done:
 FunctionEnd
 
 Section "TonyDash学习终端（必需）" SecMain
