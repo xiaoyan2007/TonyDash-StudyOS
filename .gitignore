@@ -53,6 +53,9 @@ env/
 /tests/_perf*/
 /tests/_verify14/
 /tests/_MEI*/
+/tests/_acl_recovery/
+/tests/_install_verify/
+/tests/_install_verify2/
 /tests/*.out
 /tests/_splash_log.txt
 /tests/_icon.out
